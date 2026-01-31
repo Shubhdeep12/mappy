@@ -16,10 +16,14 @@ export interface RouteRequest {
   };
 }
 
+const defaultBaseUrl = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL
+  ? import.meta.env.VITE_API_BASE_URL
+  : '/api';
+
 export class RouteAPI {
   private baseUrl: string;
 
-  constructor(baseUrl: string = '/api') {
+  constructor(baseUrl: string = defaultBaseUrl) {
     this.baseUrl = baseUrl;
   }
 
