@@ -5,7 +5,7 @@
   "description": "AI Waypoint Route Planner - Multi-agent spatial optimization system",
   "packageManager": "pnpm@9.15.7",
   "engines": {
-    "node": "20.x",
+    "node": "24.x",
     "pnpm": ">=9.0.0"
   },
   "scripts": {
