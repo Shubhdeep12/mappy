@@ -1,0 +1,9 @@
+# Backend-specific ignores
+dist/
+*.log
+.env
+.env.local
+
+# Coverage
+coverage/
+.nyc_output/

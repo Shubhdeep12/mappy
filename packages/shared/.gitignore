@@ -1,0 +1,5 @@
+# Shared package-specific ignores
+dist/
+*.log
+.env
+.env.local

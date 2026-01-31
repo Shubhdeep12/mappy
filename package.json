@@ -1,0 +1,27 @@
+{
+  "name": "mappy-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Waypoint Route Planner - Multi-agent spatial optimization system",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -n \"backend,frontend\" -c \"blue,green\" \"pnpm run dev:backend\" \"pnpm run dev:frontend\"",
+    "build": "pnpm --filter \"./packages/*\" build",
+    "lint": "pnpm --filter \"./packages/*\" lint",
+    "clean": "pnpm --filter \"./packages/*\" clean && rm -rf node_modules .pnpm-store",
+    "dev:backend": "pnpm --filter @mappy/backend dev",
+    "dev:frontend": "pnpm --filter @mappy/frontend dev",
+    "build:shared": "pnpm --filter @mappy/shared build",
+    "build:backend": "pnpm --filter @mappy/backend build",
+    "build:frontend": "pnpm --filter @mappy/frontend build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.3"
+  }
+}

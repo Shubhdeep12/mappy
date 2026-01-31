@@ -1,0 +1,12 @@
+# Frontend-specific ignores
+dist/
+build/
+.vite/
+*.log
+.env
+.env.local
+.env.production.local
+
+# Coverage
+coverage/
+.nyc_output/
