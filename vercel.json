@@ -2,10 +2,5 @@
   "buildCommand": "pnpm run build",
   "outputDirectory": "packages/frontend/dist",
   "installCommand": "corepack enable && pnpm install --prod=false --frozen-lockfile",
-  "framework": null,
-  "functions": {
-    "api/[[...path]].ts": {
-      "includeFiles": "packages/backend/dist/**"
-    }
-  }
+  "framework": null
 }

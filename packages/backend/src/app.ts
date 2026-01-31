@@ -1,6 +1,6 @@
 /**
- * Express app factory — exported for Vercel serverless (no listen here).
- * packages/backend/src/index.ts imports this and calls listen() for local dev.
+ * Express app — routes, middleware, and handler setup.
+ * packages/backend/src/index.ts imports this and calls listen() to run the server.
  */
 
 import express, { type Express } from 'express';
