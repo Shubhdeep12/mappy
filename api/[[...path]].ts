@@ -5,7 +5,9 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
+type NodeHandler = (req: IncomingMessage, res: ServerResponse) => void;
+
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const { default: app } = await import('../packages/backend/dist/app.js');
-  app(req, res);
+  (app as NodeHandler)(req, res);
 }
