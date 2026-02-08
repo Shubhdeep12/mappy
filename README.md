@@ -4,12 +4,7 @@
 
 Generate personalized walking routes from natural language preferences. Instead of optimizing for speed, Mappy optimizes for experience—scenic quality, points of interest, and what you actually want.
 
-| Link | URL |
-|------|-----|
-| Demo video | [YouTube](https://youtu.be/ZYh7azK2g7k?si=uzEJpBLbX3uFBNR1) |
-| Repository | (this repo) |
-| Live demo | (add deployed app URL when available) |
-
+[Demo Video](https://youtu.be/ZYh7azK2g7k?si=uzEJpBLbX3uFBNR1)
 ---
 
 ## The Problem
