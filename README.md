@@ -81,12 +81,11 @@ pnpm dev
 - **Backend** runs on `http://localhost:8080`, **frontend** on `http://localhost:3000` (or the port Vite prints).
 - Open the frontend URL in the browser. In the app, add **Gemini** and **Google Maps** API keys in Settings to use full features, or use **free mode** (Ollama + OpenStreetMap) with no keys.
 
-### API keys (optional for full features)
+### API keys
 
 - **Gemini API** — [Google AI Studio](https://aistudio.google.com/apikey)
 - **Google Maps API** — [Google Cloud Console](https://console.cloud.google.com/) (enable Routes, Places, Geocoding APIs)
 
-Without keys, the app can run in free mode (Ollama + OSM) if you run [Ollama](https://ollama.ai) locally.
 
 ---
 
