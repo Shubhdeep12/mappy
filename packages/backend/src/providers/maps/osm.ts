@@ -1,22 +1,8 @@
 /**
- * OpenStreetMap Provider (Development)
- * 
- * Implementation of MapsProvider using free OSM services.
- * Used in development mode for zero-cost mapping.
- * 
- * Services used:
- * - OSRM: Routing (http://router.project-osrm.org)
- * - Overpass API: POI discovery (https://overpass-api.de/api/interpreter)
- * - Nominatim: Geocoding (https://nominatim.openstreetmap.org)
- * - Open-Elevation: Elevation data (https://api.open-elevation.com)
- * 
- * Features:
- * - Walking, running, biking route calculation
- * - POI discovery with OSM tag mapping
- * - Address geocoding with rate limit compliance
- * - Elevation profile generation
- * - Health checks for all services
+ * OpenStreetMap Provider - Free mapping services for development.
+ * Uses OSRM (routing), Overpass API (POI discovery), Nominatim (geocoding), Open-Elevation (elevation).
  */
+
 
 import type { MapsProvider } from './interface';
 import type { LatLng, BoundingBox, TravelMode, POIType, Route, POI } from '@mappy/shared';
@@ -50,7 +36,7 @@ export class OSMProvider implements MapsProvider {
 
     try {
       const url = `${this.osrmEndpoint}/route/v1/${profile}/${coords}?overview=full&geometries=geojson&steps=true&annotations=true`;
-      
+
       const response = await fetch(url, {
         signal: controller.signal,
         headers: {
@@ -120,14 +106,14 @@ export class OSMProvider implements MapsProvider {
       };
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           throw new Error(`OSRM request timeout after ${this.timeout}ms`);
         }
         throw error;
       }
-      
+
       throw new Error(`Unknown error in OSM routing: ${error}`);
     }
   }
@@ -187,13 +173,13 @@ out center tags;`;
       }
 
       const pois: POI[] = [];
-      
+
       for (const element of data.elements) {
         const location = element.lat && element.lon
           ? { lat: element.lat, lng: element.lon }
           : element.center
-          ? { lat: element.center.lat, lng: element.center.lon }
-          : null;
+            ? { lat: element.center.lat, lng: element.center.lon }
+            : null;
 
         if (!location) {
           continue;
@@ -208,18 +194,18 @@ out center tags;`;
           metadata: element.tags,
         });
       }
-      
+
       return pois;
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           throw new Error(`Overpass API request timeout after ${this.timeout}ms`);
         }
         throw error;
       }
-      
+
       throw new Error(`Unknown error in POI discovery: ${error}`);
     }
   }
@@ -234,7 +220,7 @@ out center tags;`;
 
     try {
       const url = `${this.nominatimEndpoint}/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
-      
+
       const response = await fetch(url, {
         signal: controller.signal,
         headers: {
@@ -264,14 +250,14 @@ out center tags;`;
       };
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           throw new Error(`Geocoding request timeout after 10s`);
         }
         throw error;
       }
-      
+
       throw new Error(`Unknown error in geocoding: ${error}`);
     }
   }
@@ -317,14 +303,14 @@ out center tags;`;
       return data.results.map((r) => r.elevation || 0);
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           throw new Error(`Elevation request timeout after ${this.timeout}ms`);
         }
         throw error;
       }
-      
+
       throw new Error(`Unknown error in elevation lookup: ${error}`);
     }
   }
@@ -338,8 +324,8 @@ out center tags;`;
       // Format: lng,lat;lng,lat (OSRM format)
       const testCoords = '-122.4194,37.7749;-122.4094,37.7849';
       const url = `${this.osrmEndpoint}/route/v1/foot/${testCoords}?overview=false`;
-      
-      const response = await fetch(url, { 
+
+      const response = await fetch(url, {
         signal: controller.signal,
         headers: {
           'User-Agent': 'Mappy/1.0',
@@ -347,7 +333,7 @@ out center tags;`;
       });
 
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         console.warn(`OSM health check failed: ${response.status} ${response.statusText} from ${this.osrmEndpoint}`, errorText.substring(0, 100));
@@ -360,7 +346,7 @@ out center tags;`;
         console.warn(`OSM health check: Invalid response from ${this.osrmEndpoint}`, data?.code || 'No data');
         return false;
       }
-      
+
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -378,6 +364,11 @@ out center tags;`;
       water: 'natural=water',
       scenic: 'tourism=viewpoint',
       historical: 'historic',
+      nature: 'natural',
+      landmark: 'tourism=attraction',
+      shopping: 'shop',
+      entertainment: 'tourism=museum',
+      other: 'amenity',
     };
     return mapping[type] || 'amenity=cafe';
   }

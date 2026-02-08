@@ -1,18 +1,9 @@
 /**
- * PreferenceParser
- *
- * Parses user-provided preference pills (short natural language expressions) into a structured set of constraints, objectives, and interpretations for route generation.
- *
- * - Utilizes LLMs for advanced preference understanding and reasoning.
- * - Extracts hard constraints (e.g., strict limits), soft constraints (negotiable attributes), and optimization objectives (e.g., maximize scenery or safety).
- * - Detects and represents ambiguous or conflicting input, providing mechanisms for further clarification.
- * - Computes per-field and overall confidence scores for extracted data.
- * - Supports caching of preference parsing results (24h TTL) for identical pill sets to optimize performance.
- * - Includes robust rule-based parsing fallback for common/expected language or LLM failure scenarios, ensuring reliability in production.
- *
- * Returns: ParsedPreferences (constraints, objectives, interpretations, confidence).
+ * PreferenceParser - Converts natural language preferences into structured constraints
+ * using LLM parsing with rule-based fallback for reliability.
  */
- 
+
+
 
 import type { LLMProvider } from '../providers/llm/interface';
 import type { PreferencePill, ParsedPreferences, HardConstraint, SoftConstraint, Objective, Ambiguity, ConfidenceScore, ContextMetadata } from '@mappy/shared';
@@ -28,7 +19,7 @@ export class PreferenceParser {
     try {
       return await this.parseWithLLM(preferences, context);
     } catch (error) {
-      console.warn('LLM parsing failed, falling back to rule-based parser:', error);
+      console.warn('[PreferenceParser] LLM parsing failed, falling back to rule-based parser:', error);
       return this.parseWithRules(preferences, context);
     }
   }
@@ -65,9 +56,7 @@ export class PreferenceParser {
                   weight: { type: 'number', minimum: 0, maximum: 1 },
                   preferences: {
                     type: 'object',
-                    properties: {
-                      _dynamic: { type: 'number' }
-                    }
+                    description: 'Dynamic preferences object (e.g. POI types with weights). Do NOT use "_dynamic" as a key.',
                   },
                   negotiable: { type: 'boolean' },
                 },
@@ -116,9 +105,7 @@ export class PreferenceParser {
             overall: { type: 'number', minimum: 0, maximum: 1 },
             byField: {
               type: 'object',
-              properties: {
-                _dynamic: { type: 'number' }
-              }
+              description: 'Confidence scores per field (e.g. {"distance": 0.95, "scenic": 0.8})',
             },
           },
           required: ['overall', 'byField'],
@@ -135,24 +122,60 @@ export class PreferenceParser {
             required: ['field', 'possibleValues', 'confidence'],
           },
         },
+        specific_places: {
+          type: 'array',
+          description: 'Specific named places mentioned (e.g. "India Gate", "Blue Tokai Cafe")',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              type: { type: 'string' },
+              priority: { type: 'number', minimum: 1, maximum: 10 },
+            },
+            required: ['name'],
+          },
+        },
       },
       required: ['constraints', 'objectives', 'interpretations', 'confidence', 'ambiguities'],
     };
 
     const result = await this.llm.generateJSON<Partial<ParsedPreferences>>(prompt, schema, {
-      systemInstruction: `You are a spatial constraint reasoner for Mappy. 
-Goal: Parse user preference pills into structured constraints and objectives.
+      systemInstruction: `You are a spatial constraint reasoner for Mappy route generation.
 
-TASK:
-1. Extract HARD constraints (distance, time, elevation, boundary).
-2. Extract SOFT constraints (scenic, safety, poi, surface) with weights.
-3. Identify optimizing OBJECTIVES (maximize/minimize metrics).
-4. Generate INTERPRETATIONS for ambiguities.
-5. Identify AMBIGUITIES needing clarification.
+Parse user preferences into structured constraints and objectives.
 
-DISTANCE UNIT: When the user does not specify a distance unit (e.g. "5", "scenic walk", "long run"), use ${preferredUnit} for the distance constraint (value and unit). When they do specify (e.g. "5 km", "3 miles"), use that.`,
-      thinking: true,
-      temperature: 0.1, 
+CONSTRAINT TYPES:
+1. HARD (strict): distance, time, elevation, boundary
+   - If NO distance specified → add default 5 ${preferredUnit} hard constraint
+
+2. SOFT (preferences with weights 0-1):
+   - scenic: architectural, beautiful, nature, views, peaceful
+   - safety: well-lit, populated, sidewalks
+   - poi: ANY place type (restaurants, shops, parks, museums, cafes, ramen shops, bakeries, etc.)
+   - surface: paved, trail, mixed
+
+POI EXTRACTION:
+- "ramen shop" → poi type: restaurant + ramen (both important)
+- "traditional architecture" → scenic preference with cultural interest
+- "coffee shops" → poi type: cafe
+- "museums and parks" → poi types: museum + park
+- Extract ALL mentioned POI types, don't limit
+
+OBJECTIVES:
+- Add objectives matching soft constraints (poi_satisfaction, scenic_quality, safety_score)
+- Weight based on emphasis in user input
+
+SPECIFIC PLACES:
+- Proper nouns only: "India Gate", "Blue Tokai Cafe", "Starbucks on Main St"
+- NOT generic: "ramen shop", "a cafe", "parks"
+
+CONFIDENCE:
+- High (0.7-0.9): clear, specific preferences
+- Medium (0.5-0.7): somewhat vague
+- Low (0.3-0.5): very ambiguous`,
+      // thinking: true,
+      temperature: 0.1,
+      maxTokens: 4096,
     });
 
     if (!result || typeof result !== 'object') {
@@ -163,7 +186,23 @@ DISTANCE UNIT: When the user does not specify a distance unit (e.g. "5", "scenic
   }
 
   private buildPrompt(preferences: PreferencePill[]): string {
-    return preferences.map((p, i) => `${i + 1}. "${p.text}"`).join('\n');
+    const pills = preferences.map((p, i) => `${i + 1}. "${p.text}"`).join('\n');
+
+    return `Parse these user preferences for route generation:
+
+${pills}
+
+CONTEXT: User wants a walking/exploring route. Each preference pill can specify:
+- Distance/time (e.g. "5 miles", "30 minutes")
+- POI types they want to visit (e.g. "cafes", "ramen shop", "historical sites")
+- Route qualities (e.g. "scenic", "safe", "quiet")
+- Specific named places (e.g. "India Gate", "Blue Tokai Cafe")
+
+IMPORTANT:
+- POI-related terms (restaurant types, landmarks, shops, etc.) should create soft constraints with type='poi'
+- If no distance specified, add default: 5 miles hard constraint
+- Extract all POI types mentioned (restaurant, ramen, coffee shop, park, museum, etc.)
+- Architectural/cultural terms ("traditional architecture") suggest scenic/cultural preferences`;
   }
 
   private normalizeParsedPreferences(result: Partial<ParsedPreferences>): ParsedPreferences {
@@ -175,6 +214,7 @@ DISTANCE UNIT: When the user does not specify a distance unit (e.g. "5", "scenic
       objectives: Array.isArray(result.objectives) ? result.objectives : [],
       interpretations: Array.isArray(result.interpretations) ? result.interpretations : [],
       ambiguities: Array.isArray(result.ambiguities) ? result.ambiguities : [],
+      specific_places: Array.isArray(result.specific_places) ? result.specific_places : undefined,
       confidence: {
         overall: typeof result.confidence?.overall === 'number'
           ? Math.max(0, Math.min(1, result.confidence.overall))
@@ -306,6 +346,9 @@ DISTANCE UNIT: When the user does not specify a distance unit (e.g. "5", "scenic
         viewpoint: ['viewpoint', 'lookout', 'overlook', 'vista', 'panorama'],
         water: ['water', 'lake', 'river', 'creek', 'pond', 'beach', 'waterfront'],
         historical: ['historical', 'historic', 'monument', 'landmark', 'museum'],
+        shopping: ['shopping', 'shop', 'mall', 'store', 'boutique', 'retail', 'market'],
+        scenic: ['scenic', 'view', 'vista', 'overlook', 'observation'],
+        landmark: ['landmark', 'attraction', 'site', 'destination'],
       };
 
       const matchedPOITypes: string[] = [];

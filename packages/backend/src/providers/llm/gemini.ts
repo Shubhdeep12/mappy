@@ -1,20 +1,8 @@
 /**
- * Gemini LLM Provider (Production)
- *
- * Uses the official @google/genai SDK for Google Gemini API.
- * Recommended for production: maintained by Google, type-safe, and gets
- * new Gemini 2.0+ features (JSON mode, schema, streaming, etc.).
- *
- * Features:
- * - Gemini 2.0 Flash model (fast, cost-effective)
- * - Native JSON mode (responseMimeType: 'application/json')
- * - Structured output with optional responseSchema
- * - Timeout and error handling via SDK + AbortSignal
- * - Health check via models.get()
- *
- * @see https://www.npmjs.com/package/@google/genai
- * @see https://googleapis.github.io/js-genai/
+ * Gemini LLM Provider - Uses Google Gemini API via @google/genai SDK.
+ * Supports JSON mode, structured output, and native schema validation.
  */
+
 
 import { GoogleGenAI } from '@google/genai';
 import type { LLMProvider, GenerateOptions, JSONSchema } from './interface';
@@ -22,9 +10,9 @@ import type { LLMProvider, GenerateOptions, JSONSchema } from './interface';
 export class GeminiProvider implements LLMProvider {
   private readonly client: GoogleGenAI;
   private readonly model: string;
-  private readonly timeout: number = 30000; // 30 seconds
+  private readonly timeout: number = 60000; // 60 seconds (waypoint optimization can take longer)
 
-  constructor(apiKey: string, model: string = 'gemini-3.0-flash') {
+  constructor(apiKey: string, model: string = 'gemini-3-flash-preview') {
     if (!apiKey) {
       throw new Error('Gemini API key is required');
     }
@@ -49,7 +37,7 @@ export class GeminiProvider implements LLMProvider {
 
       // Enable Grounding if requested
       if (options?.grounding) {
-        config.tools = [{ googleSearchRetrieval: {} }];
+        config.tools = [{ googleSearch: {} }];
       }
 
       // Enable Thinking if requested
@@ -85,51 +73,108 @@ export class GeminiProvider implements LLMProvider {
   async generateJSON<T>(prompt: string, schema?: JSONSchema, options?: GenerateOptions): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    let trimmed = '';
 
     try {
-      const config: any = {
+      // Build system instruction that STRONGLY emphasizes JSON-only output
+      const jsonOnlyInstruction = options?.systemInstruction
+        ? `${options.systemInstruction}\n\nIMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanations.`
+        : 'Return ONLY valid JSON. No markdown code blocks, no explanations, just the raw JSON object.';
+
+      const generationConfig: any = {
         abortSignal: controller.signal,
         temperature: options?.temperature ?? 0.3,
         maxOutputTokens: options?.maxTokens ?? 2048,
         responseMimeType: 'application/json',
-        systemInstruction: options?.systemInstruction,
+        systemInstruction: jsonOnlyInstruction,
       };
 
       if (schema && this.isSchemaValidForGemini(schema)) {
-        config.responseSchema = schema as unknown;
+        generationConfig.responseSchema = schema as unknown;
       }
 
       // Enable Grounding/Thinking in JSON mode as well if requested
       if (options?.grounding) {
-        config.tools = [{ googleSearchRetrieval: {} }];
+        generationConfig.tools = [{ googleSearch: {} }];
       }
       if (options?.thinking) {
-        config.thinkingConfig = { includeThoughts: true };
+        generationConfig.thinkingConfig = { includeThoughts: true };
       }
 
       const response = await this.client.models.generateContent({
         model: this.model,
         contents: prompt,
-        config,
+        config: generationConfig,
       });
 
       clearTimeout(timeoutId);
+
+      // Log if response was truncated (helps debug MAX_TOKENS / total token limit issues)
+      const finishReason = response.candidates?.[0]?.finishReason;
+      if (finishReason && String(finishReason) === 'MAX_TOKENS') {
+        console.warn('[Gemini] Response truncated (MAX_TOKENS). Consider increasing maxTokens or reducing prompt/response size.');
+      }
 
       const jsonText = response.text;
       if (jsonText == null || jsonText === '') {
         throw new Error('Gemini API returned empty response');
       }
 
-      // Gemini 3 JSON mode is pure and doesn't require markdown cleaning
-      // but we trim just in case of trailing whitespace
-      return JSON.parse(jsonText.trim()) as T;
+      trimmed = jsonText.trim();
+
+      // PRODUCTION FIX: Extract JSON from markdown-wrapped responses
+      // Gemini sometimes ignores responseMimeType and adds "Here is the JSON:\n```json\n..."
+      trimmed = this.extractJSON(trimmed);
+
+      try {
+        const parsed = JSON.parse(trimmed) as T;
+
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length === 0) {
+          throw new Error('Gemini returned empty object {}');
+        }
+
+        return parsed;
+      } catch (parseError) {
+        console.warn('[Gemini] JSON parse failed. Raw response:', trimmed.slice(0, 500));
+        throw parseError;
+      }
     } catch (error: unknown) {
       clearTimeout(timeoutId);
       if (error instanceof SyntaxError) {
-        throw new Error(`Failed to parse Gemini JSON output: ${error.message}. Raw output: ${JSON.stringify(error)}`);
+        throw new Error(`Failed to parse Gemini JSON output: ${error.message}. Raw output partial: ${trimmed?.slice(0, 1000)}`);
       }
       this.throwWithContext(error, 'generateJSON');
     }
+  }
+
+  /**
+   * Extract clean JSON from Gemini response text.
+   * Handles markdown code blocks and explanatory prefixes.
+   * 
+   * Production-ready: covers all common Gemini response formats.
+   */
+  private extractJSON(text: string): string {
+    let cleaned = text.trim();
+
+    // Pattern 1: Already clean JSON
+    if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
+      return cleaned;
+    }
+
+    // Pattern 2: Markdown code block: ```json\n{...}\n``` or ```\n{...}\n```
+    const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      return codeBlockMatch[1].trim();
+    }
+
+    // Pattern 3: Prefix text like "Here is the JSON requested:" followed by JSON
+    const jsonStartMatch = cleaned.match(/([{\[][\s\S]*)/);
+    if (jsonStartMatch && jsonStartMatch[1]) {
+      return jsonStartMatch[1].trim();
+    }
+
+    // Return as-is and let JSON.parse fail with clear error
+    return cleaned;
   }
 
   private isSchemaValidForGemini(schema: unknown): boolean {
@@ -176,7 +221,9 @@ export class GeminiProvider implements LLMProvider {
         ),
       ]);
       return true;
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[Gemini] healthCheck failed:', msg, '(model:', this.model + ')');
       return false;
     }
   }

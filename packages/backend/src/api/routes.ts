@@ -29,6 +29,7 @@ import { RouteGenerationRequestSchema } from '@mappy/shared';
 import { ProviderFactory } from '../providers/factory';
 import { createError } from '../middleware/error-handler';
 import { RouteOrchestrator } from '../services/orchestrator';
+import { formatErrorResponse } from '../utils/user-friendly-errors';
 
 const router: Router = Router();
 
@@ -68,10 +69,15 @@ router.get('/status', (_req: Request, res: Response) => {
   });
 });
 
-// Route generation endpoint
+// Route generation endpoint with SSE support
 router.post('/generate', async (req, res, next) => {
   let llm: Awaited<ReturnType<typeof ProviderFactory.createLLMProvider>> | undefined;
   let maps: Awaited<ReturnType<typeof ProviderFactory.createMapsProvider>> | undefined;
+  
+  // Check if client wants streaming (SSE)
+  const acceptHeader = req.headers.accept || '';
+  const wantsStream = acceptHeader.includes('text/event-stream');
+  
   try {
     // Validate request
     const validationResult = RouteGenerationRequestSchema.safeParse({
@@ -93,6 +99,22 @@ router.post('/generate', async (req, res, next) => {
 
     const { preferences, location, apiKeys, context } = validationResult.data;
 
+    // Setup SSE if requested
+    if (wantsStream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+    }
+
+    const sendProgress = (step: string, message: string, progress?: number) => {
+      if (wantsStream) {
+        res.write(`data: ${JSON.stringify({ type: 'progress', step, message, progress })}\n\n`);
+      }
+    };
+
+    sendProgress('init', 'Initializing providers...', 5);
+
     try {
       llm = await ProviderFactory.createLLMProvider(apiKeys?.gemini);
       maps = await ProviderFactory.createMapsProvider(apiKeys?.googleMaps);
@@ -106,6 +128,8 @@ router.post('/generate', async (req, res, next) => {
         }
       );
     }
+
+    sendProgress('health_check', 'Checking provider connectivity...', 10);
 
     // Health check providers
     const [llmHealthy, mapsHealthy] = await Promise.all([
@@ -135,10 +159,16 @@ router.post('/generate', async (req, res, next) => {
       const routes = await orchestrator.generateRoute(
         preferences,
         location,
-        context
+        context,
+        wantsStream ? sendProgress : undefined
       );
 
-      res.json({ routes });
+      if (wantsStream) {
+        res.write(`data: ${JSON.stringify({ type: 'complete', routes })}\n\n`);
+        res.end();
+      } else {
+        res.json({ routes });
+      }
     } catch (orchestratorError) {
       throw createError(
         orchestratorError instanceof Error ? orchestratorError.message : 'Route generation failed',
@@ -150,7 +180,20 @@ router.post('/generate', async (req, res, next) => {
       );
     }
   } catch (error) {
-    next(error);
+    if (wantsStream && !res.headersSent) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+    }
+    
+    const friendlyError = formatErrorResponse(error);
+    
+    if (wantsStream) {
+      res.write(`data: ${JSON.stringify({ type: 'error', ...friendlyError })}\n\n`);
+      res.end();
+    } else {
+      next(error);
+    }
   } finally {
     // Do not retain provider instances (they hold user API keys). Release references
     // so they can be GC'd; we never store or reuse them after the request.

@@ -43,7 +43,12 @@ export class SpatialReasoner {
     let searchRadiusMeters: number;
 
     if (routeType === ROUTE_MODE.WALK) {
-      searchRadiusMeters = targetDistanceMeters / 2;
+      // For loops: radius = target / 6 to account for road distance factor (~1.7x in urban areas)
+      // e.g. 5km loop:
+      //   - Search radius: 5000m / 6 = 833m (straight-line)
+      //   - 3 POIs at ~700m each (straight-line)
+      //   - Actual road loop: ~700m × 1.7 × 4 segments ≈ 4.8km ✓
+      searchRadiusMeters = targetDistanceMeters / 6;
     } else {
       searchRadiusMeters = Math.max(targetDistanceMeters, 5000);
     }

@@ -1,34 +1,17 @@
 /**
- * GoogleMapsProvider - Production-Ready Implementation (Non-Legacy APIs)
- *
- * Integrates core Google Maps APIs for robust, reliable location-based services.
- * 
- * Utilized APIs:
- * - Routes API (v2, REST): For advanced routing and directions.
- * - Places API (2023+, REST): Modern, feature-rich POI and place discovery.
- * - Geocoding & Elevation APIs: Provided via @googlemaps/google-maps-services-js.
- * - Polyline Decoding: Leveraging @googlemaps/polyline-codec for efficient handling of path data.
- *
- * Requirements:
- * - User-supplied Google Maps API key (environment variable or securely injected).
- * - All necessary APIs enabled in Google Cloud project:
- *   • Routes API (routes.googleapis.com)
- *   • Places API (places.googleapis.com)
- *   • Geocoding API (maps.googleapis.com)
- *   • Elevation API (maps.googleapis.com)
- *
- * Notes:
- * - Strives for minimal latency, using field masking and modern endpoints where possible.
- * - Avoids deprecated/legacy endpoints and anticipates future API deprecations.
- * - Handles polyline decoding natively for optimal performance.
- * - Designed for extensibility and ease of debugging in production environments.
+ * Google Maps Provider - Production implementation using Routes API (v2),
+ * Places API (2023+), Geocoding, and Elevation APIs.
  */
 
+
+import { createRequire } from 'node:module';
 import { Client, Status } from '@googlemaps/google-maps-services-js';
 import { RoutesClient } from '@googlemaps/routing';
 import { PlacesClient } from '@googlemaps/places';
-import { decode } from '@googlemaps/polyline-codec';
 import { getDistance } from 'geolib';
+
+const require = createRequire(import.meta.url);
+const { decode } = require('@googlemaps/polyline-codec') as { decode: (encoded: string, precision?: number) => [number, number][] };
 import type { MapsProvider } from './interface';
 import type { LatLng, BoundingBox, TravelMode, POIType, Route, POI } from '@mappy/shared';
 
@@ -280,14 +263,18 @@ export class GoogleMapsProvider implements MapsProvider {
   }
 
   /**
-   * Parses a duration string to a number.
+   * Parses a duration value to a number (seconds).
    * 
-   * @param duration - The duration string to parse.
-   * @returns The parsed duration.
+   * @param duration - The duration value (string like "30s", number, or undefined).
+   * @returns The parsed duration in seconds.
    */
-  private parseDuration(duration: string | undefined): number {
+  private parseDuration(duration: string | number | undefined): number {
     if (!duration) return 0;
-    return parseInt(duration.replace('s', ''), 10) || 0;
+    if (typeof duration === 'number') return duration;
+    if (typeof duration === 'string') {
+      return parseInt(duration.replace('s', ''), 10) || 0;
+    }
+    return 0;
   }
 
   /**
@@ -319,9 +306,14 @@ export class GoogleMapsProvider implements MapsProvider {
       park: 'park',
       viewpoint: 'tourist_attraction',
       restaurant: 'restaurant',
-      water: 'natural_feature',
+      water: 'park', // Parks often include waterfront/water features
       scenic: 'tourist_attraction',
       historical: 'museum',
+      nature: 'park',
+      landmark: 'tourist_attraction',
+      shopping: 'shopping_mall',
+      entertainment: 'amusement_park',
+      other: 'establishment',
     };
     return mapping[type] ?? 'establishment';
   }

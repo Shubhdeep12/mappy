@@ -1,8 +1,5 @@
 /**
- * Route Orchestrator Service
- * 
- * Coordinates all agents in the route generation pipeline.
- * Implements event-driven coordination with error handling and retries.
+ * Route Orchestrator - Coordinates all 7 agents in the route generation pipeline.
  */
 
 import type { LLMProvider } from '../providers/llm/interface';
@@ -10,6 +7,7 @@ import type { MapsProvider } from '../providers/maps/interface';
 import { PreferenceParser } from '../agents/preference-parser';
 import { SpatialReasoner } from '../agents/spatial-reasoner';
 import { POIDiscoverer } from '../agents/poi-discoverer';
+import { StrategicPlanner } from '../agents/strategic-planner';
 import { WaypointOptimizer } from '../agents/waypoint-optimizer';
 import { RouteValidator } from '../agents/route-validator';
 import { RouteEvaluator } from '../agents/route-evaluator';
@@ -25,6 +23,7 @@ import {
   ACTIVITY_TYPE,
   ROUTE_MODE,
 } from '../config/constants';
+import { validateCoordinates, getLocationDescription } from '../utils/coordinate-validator';
 import {
   PreferencePill,
   LocationInput,
@@ -43,18 +42,20 @@ export class RouteOrchestrator {
   private preferenceParser: PreferenceParser;
   private spatialReasoner: SpatialReasoner;
   private poiDiscoverer: POIDiscoverer;
+  private strategicPlanner: StrategicPlanner;
   private waypointOptimizer: WaypointOptimizer;
   private routeValidator: RouteValidator;
   private routeEvaluator: RouteEvaluator;
   private mapsExporter: MapsExporter;
   private maps: MapsProvider;
 
-  constructor(llm: LLMProvider, maps: MapsProvider, isAdvancedModel: boolean = false) {
+  constructor(llm: LLMProvider, maps: MapsProvider, _isAdvancedModel: boolean = false) {
     this.maps = maps;
     this.preferenceParser = new PreferenceParser(llm);
     this.spatialReasoner = new SpatialReasoner();
     this.poiDiscoverer = new POIDiscoverer(maps);
-    this.waypointOptimizer = new WaypointOptimizer(llm, isAdvancedModel);
+    this.strategicPlanner = new StrategicPlanner(llm);
+    this.waypointOptimizer = new WaypointOptimizer();
     this.routeValidator = new RouteValidator(maps);
     this.routeEvaluator = new RouteEvaluator(llm);
     this.mapsExporter = new MapsExporter();
@@ -65,20 +66,32 @@ export class RouteOrchestrator {
    * @param preferences - User preferences (e.g. "5 mile scenic walk")
    * @param location - User's starting location (address, coordinates, or current location)
    * @param context - Additional context (e.g. route type, activity type, time of day, weather, device type)
+   * @param onProgress - Optional callback for streaming progress updates
    * @returns Array of generated routes
    */
   async generateRoute(
     preferences: PreferencePill[],
     location: LocationInput,
-    context?: ContextMetadata
+    context?: ContextMetadata,
+    onProgress?: (step: string, message: string, progress?: number) => void
   ): Promise<GeneratedRoute[]> {
     // Step 1: Resolve location to coordinates
+    onProgress?.('geocoding', 'Resolving location...', 15);
     const origin = await this.resolveLocation(location);
 
-    // Step 2: Parse preferences 
+    // Step 1.5: Validate origin coordinates
+    const coordValidation = validateCoordinates(origin);
+    if (!coordValidation.valid) {
+      throw new Error(`${coordValidation.error} at ${getLocationDescription(origin)}. ${coordValidation.suggestion}`);
+    }
+
+    // Step 2: Parse preferences
+    onProgress?.('preferences', 'Analyzing your preferences...', 25);
     const parsedPreferences = await this.preferenceParser.parse(preferences, context);
+    console.log('[Orchestrator] Parsed preferences soft constraints:', JSON.stringify(parsedPreferences.constraints.soft, null, 2));
 
     // Step 3: Compute search space
+    onProgress?.('search_space', 'Computing search area...', 30);
     const routeType = context?.routeType || ROUTE_MODE.WALK;
     const distanceConstraint = parsedPreferences.constraints.hard.find(c => c.type === 'distance') ?? null;
     const searchSpace = this.spatialReasoner.computeSearchSpace(
@@ -88,31 +101,65 @@ export class RouteOrchestrator {
     );
 
     // Step 4: Discover POIs
+    onProgress?.('poi_discovery', 'Discovering points of interest nearby...', 40);
     const bounds = {
       north: searchSpace.boundary.coordinates[0][2][1],
       south: searchSpace.boundary.coordinates[0][0][1],
       east: searchSpace.boundary.coordinates[0][1][0],
       west: searchSpace.boundary.coordinates[0][0][0],
     };
+    // Pass raw preference texts for fallback POI type extraction
+    const rawPreferenceTexts = preferences.map(p => p.text);
     const pois = await this.poiDiscoverer.discoverPOIs(
       bounds,
       parsedPreferences,
-      ROUTE_CONSTANTS.MAX_POIS_DISCOVERED
+      ROUTE_CONSTANTS.MAX_POIS_DISCOVERED,
+      rawPreferenceTexts
     );
+    // Create POI type summary for user feedback
+    const poiTypeCounts = new Map<string, number>();
+    for (const poi of pois) {
+      poiTypeCounts.set(poi.type, (poiTypeCounts.get(poi.type) || 0) + 1);
+    }
+    const typeSummary = Array.from(poiTypeCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([type, count]) => `${count} ${type}${count > 1 ? 's' : ''}`)
+      .join(', ');
 
-    // Step 5: Optimize waypoints
+    console.log('[Orchestrator] Discovered POI types:', [...new Set(pois.map(p => p.type))].join(', '));
+    onProgress?.('poi_discovery', `Found ${pois.length} places: ${typeSummary}`, 50);
+
+    // Step 5: AI Strategic Planning
+    const warnings: string[] = [];
+    const fallbacksUsed: string[] = [];
+
+    onProgress?.('strategic_planning', 'Analyzing preferences and POI distribution...', 52);
+    const strategy = await this.strategicPlanner.generateStrategy(
+      parsedPreferences,
+      pois,
+      searchSpace,
+      origin
+    );
+    console.log(`[Orchestrator] Strategy: ${strategy.optimizationStyle}, POI priorities:`, strategy.poiPriorities);
+
+    // Step 6: Optimize waypoints using AI-guided algorithm
+    onProgress?.('waypoint_optimization', 'Generating optimal route sequences...', 55);
     const optimizedRoutes = await this.waypointOptimizer.optimize(
       origin,
       parsedPreferences,
       searchSpace,
       pois,
-      ROUTE_CONSTANTS.MAX_CANDIDATES,
+      strategy,
       ROUTE_CONSTANTS.FINAL_ROUTES,
       routeType
     );
 
+    if (optimizedRoutes.length === 0) {
+      throw new Error('Failed to generate route candidates. Try a different location or adjust preferences.');
+    }
 
-    // Step 6: Validate ALL routes first (Maps API only, no LLM calls)
+    // Step 7: Validate ALL routes first (Maps API only, no LLM calls)
+    onProgress?.('validation', 'Validating routes with Maps API...', 65);
     interface ValidatedCandidate {
       id: string;
       optimized: OptimizedRoute;
@@ -185,8 +232,10 @@ export class RouteOrchestrator {
     if (validatedCandidates.length === 0) {
       throw new Error('Failed to generate any valid routes. Try adjusting your preferences or location.');
     }
+    onProgress?.('validation', `Validated ${validatedCandidates.length} routes`, 75);
 
-    // Step 7: Batch evaluate ALL routes in ONE LLM call (scenic + safety + narrative)
+    // Step 8: Batch evaluate ALL routes in ONE LLM call (scenic + safety + narrative)
+    onProgress?.('evaluation', 'Scoring routes and generating descriptions...', 80);
     const routeInputs = validatedCandidates.map(c => ({
       id: c.id,
       route: c.route,
@@ -201,7 +250,8 @@ export class RouteOrchestrator {
       pois
     );
 
-    // Step 8: Build final routes with scores and narratives
+    // Step 9: Build final routes with scores and narratives
+    onProgress?.('finalize', 'Finalizing routes...', 90);
     const validatedRoutes: GeneratedRoute[] = [];
     const filteredRoutes: Array<{ route: GeneratedRoute; compositeScore: number; keyMetricScore: number }> = [];
 
@@ -228,6 +278,16 @@ export class RouteOrchestrator {
         (keyMetricScore >= QUALITY_CONSTANTS.MIN_KEY_METRIC_SCORE || compositeScore >= minCompositeRequired + 1.0) &&
         distanceAccuracy >= QUALITY_CONSTANTS.MIN_DISTANCE_ACCURACY;
 
+      // Check for distance mismatch warnings
+      const targetDistance = parsedPreferences.constraints.hard.find(c => c.type === 'distance');
+      if (targetDistance && typeof targetDistance.value === 'number') {
+        const targetMeters = targetDistance.unit === 'km' ? targetDistance.value * 1000 : targetDistance.value * 1609.34;
+        const deviation = Math.abs(candidate.metadata.distance - targetMeters) / targetMeters;
+        if (deviation > 0.15) {
+          warnings.push(`Route is ${Math.round(deviation * 100)}% ${candidate.metadata.distance > targetMeters ? 'longer' : 'shorter'} than requested`);
+        }
+      }
+
       const exportData = this.mapsExporter.generateExport(
         candidate.waypoints,
         candidate.activity
@@ -243,6 +303,8 @@ export class RouteOrchestrator {
         export: exportData,
         pois: candidate.nearbyPOIs.slice(0, ROUTE_CONSTANTS.MAX_POIS_IN_RESPONSE),
         created_at: new Date().toISOString(),
+        warnings: warnings.length > 0 ? warnings : undefined,
+        fallbacks_used: fallbacksUsed.length > 0 ? fallbacksUsed : undefined,
       };
 
       if (!meetsQualityThresholds) {
@@ -288,7 +350,7 @@ export class RouteOrchestrator {
     route: Route,
     context: ContextMetadata | undefined,
     origin: LatLng,
-    optimizedRoute: OptimizedRoute
+    optimized: OptimizedRoute
   ): Promise<RouteMetadata> {
     const elevationGain = route.elevation
       ? calculateElevationGain(route.elevation)
@@ -296,7 +358,7 @@ export class RouteOrchestrator {
 
     const city = await this.inferCity(origin);
 
-    const strategy = optimizedRoute.waypoints.strategy || ROUTE_STRATEGIES.BALANCED;
+    const strategy = optimized.waypoints.strategy || ROUTE_STRATEGIES.BALANCED;
 
     const activity = context?.userActivity || ACTIVITY_TYPE.WALKING;
 

@@ -9,6 +9,7 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
+    "setup": "node scripts/setup.js",
     "dev": "concurrently -n \"backend,frontend\" -c \"blue,green\" \"pnpm run dev:backend\" \"pnpm run dev:frontend\"",
     "build": "pnpm --filter \"./packages/*\" build",
     "lint": "pnpm --filter \"./packages/*\" lint",

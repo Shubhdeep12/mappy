@@ -100,7 +100,7 @@ export const useRouteStore = create<RouteState & RouteActions>()(
         location: state.location,
         routeType: state.routeType,
         distanceUnit: state.distanceUnit,
-        // apiKeys intentionally excluded: never persist user API keys to storage
+        apiKeys: state.apiKeys,
       }),
     }
   )

@@ -1,36 +1,94 @@
 @import "tailwindcss";
 
+@theme {
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(224 71.4% 4.1%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(224 71.4% 4.1%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(224 71.4% 4.1%);
+  --color-primary: hsl(160 65% 42%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(210 40% 96.1%);
+  --color-secondary-foreground: hsl(222.2 47.4% 11.2%);
+  --color-muted: hsl(210 40% 96.1%);
+  --color-muted-foreground: hsl(215.4 16.3% 46.9%);
+  --color-accent: hsl(210 40% 96.1%);
+  --color-accent-foreground: hsl(222.2 47.4% 11.2%);
+  --color-destructive: hsl(0 84.2% 60.2%);
+  --color-destructive-foreground: hsl(210 40% 98%);
+  --color-border: hsl(214.3 31.8% 91.4%);
+  --color-input: hsl(214.3 31.8% 91.4%);
+  --color-ring: hsl(160 65% 42%);
+  --radius: 0.75rem;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
     --foreground: 224 71.4% 4.1%;
-
     --card: 0 0% 100%;
     --card-foreground: 224 71.4% 4.1%;
-
     --popover: 0 0% 100%;
     --popover-foreground: 224 71.4% 4.1%;
-
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-
+    --primary: 160 65% 42%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
-
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
-
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-
+    --ring: 160 65% 42%;
     --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+    --card: 220 45% 14%;
+    --card-foreground: 210 40% 98%;
+    --popover: 220 45% 14%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 160 55% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 40% 18%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 220 40% 18%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 220 40% 20%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 220 40% 22%;
+    --input: 220 40% 22%;
+    --ring: 160 55% 48%;
+  }
+
+  .dark {
+    --color-background: hsl(222 47% 11%);
+    --color-foreground: hsl(210 40% 98%);
+    --color-card: hsl(220 45% 14%);
+    --color-card-foreground: hsl(210 40% 98%);
+    --color-popover: hsl(220 45% 14%);
+    --color-popover-foreground: hsl(210 40% 98%);
+    --color-primary: hsl(160 55% 48%);
+    --color-primary-foreground: hsl(0 0% 100%);
+    --color-secondary: hsl(220 40% 18%);
+    --color-secondary-foreground: hsl(210 40% 96%);
+    --color-muted: hsl(220 40% 18%);
+    --color-muted-foreground: hsl(215 20.2% 65.1%);
+    --color-accent: hsl(220 40% 20%);
+    --color-accent-foreground: hsl(210 40% 96%);
+    --color-destructive: hsl(0 72% 51%);
+    --color-destructive-foreground: hsl(210 40% 98%);
+    --color-border: hsl(220 40% 22%);
+    --color-input: hsl(220 40% 22%);
+    --color-ring: hsl(160 55% 48%);
   }
 }
 
@@ -47,22 +105,22 @@
   }
 }
 
-/* Custom scrollbar for light theme */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(0 0% 98%);
+  background: hsl(var(--secondary));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(0 0% 90%);
+  background: hsl(var(--muted-foreground) / 0.4);
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(0 0% 80%);
+  background: hsl(var(--muted-foreground) / 0.6);
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -80,4 +138,85 @@
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.3);
+}
+
+/* Generate button shimmer and gradient border effects */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes gradient-border {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.generate-button-wrapper {
+  position: relative;
+  padding: 2.5px;
+  border-radius: 1rem;
+  background: hsl(var(--border));
+  height: 4rem;
+  width: 100%;
+}
+
+.generate-button-wrapper.active {
+  background: linear-gradient(90deg, #0d9488 0%, #14b8a6 25%, #2dd4bf 50%, #5eead4 75%, #0d9488 100%);
+  background-size: 300% 100%;
+  animation: gradient-border 3s linear infinite;
+}
+
+.generate-button-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-radius: calc(1rem - 2.5px);
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.generate-button-shimmer:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
+.dark .generate-button-shimmer:disabled {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
+.generate-button-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    transparent 40%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+.generate-button-wrapper.active .generate-button-shimmer::after {
+  animation: shimmer 2.5s infinite;
 }

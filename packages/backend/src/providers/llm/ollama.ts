@@ -1,18 +1,8 @@
 /**
- * Ollama LLM Provider (Development)
- * 
- * Implementation of LLMProvider for local Ollama instance.
- * Used in development mode for zero-cost LLM inference.
- * 
- * Features:
- * - Connects to local Ollama server (default: http://localhost:11434)
- * - Supports gemma3:1b model (lightweight, fast)
- * - Implements generate() and generateJSON() methods
- * - JSON extraction from markdown-wrapped responses
- * - Health check via /api/tags endpoint
- * 
- * See ENVIRONMENT_STRATEGY.md for setup instructions.
+ * Ollama LLM Provider - Local development provider using Ollama server (gemma3:1b).
+ * See ENVIRONMENT_STRATEGY.md for setup.
  */
+
 
 import type { LLMProvider, GenerateOptions, JSONSchema } from './interface';
 

@@ -1,14 +1,7 @@
 /**
- * Core type definitions for the Mappy application
- * 
- * This file defines all domain models and data structures:
- * - Route-related types (Route, Waypoint, RouteMetadata, etc.)
- * - Preference types (PreferencePill, ParsedPreferences, Constraints)
- * - POI types (POI, POIScore, POIType)
- * - Location types (LatLng, BoundingBox, GeoFence)
- * - Scoring types (ScenicScore, SafetyScore, RouteScores)
- * - Activity and context types
+ * Core type definitions for Mappy (routes, preferences, POIs, locations, scoring)
  */
+
 
 export interface LatLng {
   lat: number;
@@ -39,7 +32,19 @@ export const ROUTE_STRATEGIES = {
 export type ActivityType = typeof ACTIVITY_TYPE[keyof typeof ACTIVITY_TYPE];
 export type TravelMode = ActivityType;
 export type RouteType = typeof ROUTE_MODE[keyof typeof ROUTE_MODE];
-export type POIType = 'cafe' | 'park' | 'viewpoint' | 'restaurant' | 'water' | 'scenic' | 'historical';
+export type POIType =
+  | 'cafe'
+  | 'park'
+  | 'viewpoint'
+  | 'restaurant'
+  | 'water'
+  | 'scenic'
+  | 'historical'
+  | 'nature'      // forests, trails, gardens
+  | 'landmark'    // monuments, statues, significant buildings
+  | 'shopping'    // markets, shops, malls
+  | 'entertainment' // theaters, museums, attractions
+  | 'other';      // catch-all for dynamic LLM types
 export type RouteStrategy = typeof ROUTE_STRATEGIES[keyof typeof ROUTE_STRATEGIES];
 export type PillCategory = 'distance' | 'scenic' | 'poi' | 'safety' | 'terrain' | 'time';
 
@@ -115,6 +120,12 @@ export interface ConfidenceScore {
   byField: Record<string, number>;
 }
 
+export interface SpecificPlace {
+  name: string;
+  type?: POIType; // Optional inferred type
+  priority?: number; // How important (1-10)
+}
+
 export interface ParsedPreferences {
   constraints: {
     hard: HardConstraint[];
@@ -124,6 +135,7 @@ export interface ParsedPreferences {
   interpretations: Interpretation[];
   confidence: ConfidenceScore;
   ambiguities: Ambiguity[];
+  specific_places?: SpecificPlace[]; // AI-extracted specific place names
 }
 
 export interface POI {
@@ -247,6 +259,8 @@ export interface GeneratedRoute {
   export: ExportData;
   pois: RankedPOI[];
   created_at: string; // ISO8601
+  warnings?: string[]; // User-facing warnings about route generation
+  fallbacks_used?: string[]; // Which agents used fallback logic
 }
 
 export interface SearchSpace {

@@ -1,4 +1,9 @@
-import type { LLMProvider } from '../providers/llm/interface';
+/**
+ * Waypoint Optimizer - Generates optimal route candidates using algorithmic optimization
+ * guided by AI strategic planning (the key innovation).
+ */
+
+
 import { haversineDistance, ROUTE_STRATEGIES } from '@mappy/shared';
 import {
   ROUTE_CONSTANTS,
@@ -15,23 +20,31 @@ import type {
   EvaluatedRoute,
   WaypointSequence,
   RouteType,
+  RouteStrategy,
+  POIType,
 } from '@mappy/shared';
 
+import type { OptimizationStrategy } from './strategic-planner';
+
+/**
+ * Parameters for nearest-neighbor algorithm.
+ */
+interface NearestNeighborWeights {
+  scoreWeight: number;      // POI composite score importance
+  distanceWeight: number;   // Distance from current point importance
+  typeWeight: number;       // POI type match importance
+  diversityBonus: number;   // Bonus for POI type diversity
+}
+
 export class WaypointOptimizer {
-  private isAdvancedModel: boolean;
-
-  constructor(private llm: LLMProvider, isAdvancedModel: boolean = false) {
-    this.isAdvancedModel = isAdvancedModel;
-  }
-
   /**
-   * Optimizes waypoints for a given route.
+   * Optimizes waypoints for a given route using AI-guided algorithm.
    * 
    * @param origin - The origin of the route.
    * @param preferences - The preferences for the route.
-   * @param searchSpace - The search space for the route.
-   * @param pois - The POIs for the route.
-   * @param numCandidates - The number of candidates to generate.
+   * @param searchSpace - The search space from SpatialReasoner.
+   * @param pois - ALL discovered POIs (typically 50).
+   * @param strategy - Optimization strategy from AI StrategicPlanner.
    * @param numFinalRoutes - The number of final routes to return.
    * @param routeType - The type of route.
    * @returns The optimized routes.
@@ -41,22 +54,36 @@ export class WaypointOptimizer {
     preferences: ParsedPreferences,
     searchSpace: SearchSpace,
     pois: RankedPOI[],
-    numCandidates: number = ROUTE_CONSTANTS.MAX_CANDIDATES,
+    strategy: OptimizationStrategy,
     numFinalRoutes: number = ROUTE_CONSTANTS.FINAL_ROUTES,
     routeType: RouteType = ROUTE_MODE.WALK
   ): Promise<OptimizedRoute[]> {
-    const candidates = await this.generateCandidates(
+    console.log(`[WaypointOptimizer] Generating ${numFinalRoutes} diverse routes with ${pois.length} POIs using ${strategy.optimizationStyle} strategy`);
+
+    // Generate candidates using algorithm + AI guidance
+    const candidates = this.generateCandidatesAlgorithmic(
       origin,
       preferences,
       searchSpace,
       pois,
-      numCandidates,
+      strategy,
       routeType
     );
+
+    if (candidates.length === 0) {
+      console.warn('[WaypointOptimizer] No candidates generated, using fallback');
+      return [];
+    }
+
+    console.log(`[WaypointOptimizer] Generated ${candidates.length} candidates:`,
+      candidates.map(c => `${c.strategy} (${c.waypoints.length} stops)`).join(', '));
+
+    // Evaluate each candidate
     const evaluated = candidates.map(candidate =>
-      this.evaluateRoute(candidate, preferences, pois)
+      this.evaluateRoute(candidate, preferences, pois, strategy)
     );
 
+    // Sort by composite score and return top N
     const sorted = [...evaluated].sort((a, b) => b.composite - a.composite);
     const selected = sorted.slice(0, numFinalRoutes);
 
@@ -64,332 +91,424 @@ export class WaypointOptimizer {
       waypoints: route.waypoints,
       objectives: route.objectives,
       composite: route.composite,
-      label: this.assignLabel(route, i),
-      explanation: `Route option ${i + 1} with composite score ${route.composite.toFixed(2)}`,
+      label: this.assignLabel(route),
+      explanation: `Route option ${i + 1}`,
     }));
   }
 
   /**
-   * Generates candidates for a given route.
-   * 
-   * @param origin - The origin of the route.
-   * @param preferences - The preferences for the route.
-   * @param searchSpace - The search space for the route.
-   * @param pois - The POIs for the route.
-   * @param n - The number of candidates to generate.
-   * @param routeType - The type of route.
-   * @returns The generated candidates.
+   * Generate candidate waypoint sequences using AI-guided nearest-neighbor algorithm.
    */
-  private async generateCandidates(
-    origin: LatLng,
-    preferences: ParsedPreferences,
-    searchSpace: SearchSpace,
-    pois: RankedPOI[],
-    n: number,
-    routeType: RouteType
-  ): Promise<WaypointSequence[]> {
-    const prompt = this.buildGenerationPrompt(origin, preferences, searchSpace, pois, routeType);
-
-    try {
-      const result = await this.llm.generateJSON<{
-        sequence: Array<{ id?: string; index?: number; lat?: number; lng?: number }>
-      }>(prompt, {
-        type: 'object',
-        properties: {
-          sequence: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                id: { type: 'string' },
-                index: { type: 'number' },
-                lat: { type: 'number' },
-                lng: { type: 'number' },
-              }
-            },
-            minItems: 3,
-            maxItems: 12,
-          },
-        },
-        required: ['sequence'],
-      }, {
-        systemInstruction: `You are a Senior Route Architect for Mappy.
-Goal: Generate a logical sequence of waypoints from the provided POIs.
-- Prefer using "index" (0-based position in the list) — e.g. {"index": 0}, {"index": 5}. This is more reliable than copying long IDs.
-- You may use "id" only if you copy the exact ID string from the list.
-- Ensure the route is varied and matches the distance target.
-- For Loop routes, ensure the path curves back towards the start.`,
-        thinking: true,
-        grounding: true,
-      });
-
-      if (!result.sequence || !Array.isArray(result.sequence)) {
-        throw new Error('Invalid LLM response: missing sequence');
-      }
-
-      const sequence = this.resolveSequence(result.sequence, pois, origin);
-
-      if (sequence.waypoints.length < 2) {
-        throw new Error('LLM sequence resolved to fewer than 2 waypoints');
-      }
-
-      const strategies = Object.values(ROUTE_STRATEGIES);
-      const numStrategies = Math.min(n, strategies.length);
-      const candidates: WaypointSequence[] = [{
-        waypoints: sequence.waypoints,
-        poiIds: sequence.poiIds,
-        strategy: strategies[0],
-      }];
-
-      for (let i = 1; i < numStrategies; i++) {
-        const variation = this.createVariation(sequence.waypoints, searchSpace, routeType, origin);
-        if (variation.length >= 2) {
-          candidates.push({
-            waypoints: variation,
-            poiIds: sequence.poiIds,
-            strategy: strategies[i],
-          });
-        }
-      }
-
-      if (candidates.length === 0) {
-        throw new Error('No valid candidates after filtering');
-      }
-
-      return candidates;
-    } catch (error) {
-      console.warn('POI-centric generation failed, using greedy fallback:', error);
-      return this.greedyGenerate(origin, preferences, searchSpace, pois, n);
-    }
-  }
-
-  /**
-   * Resolves a sequence of waypoints from raw LLM output (index, id, or lat/lng).
-   * Index-based refs (0-based) are more reliable for small models than copying long IDs.
-   */
-  private resolveSequence(
-    raw: Array<{ id?: string; index?: number; lat?: number; lng?: number }>,
-    pois: RankedPOI[],
-    origin: LatLng
-  ): { waypoints: LatLng[]; poiIds: string[] } {
-    const waypoints: LatLng[] = [origin];
-    const poiIds: string[] = [];
-
-    for (const item of raw) {
-      let poi: RankedPOI | undefined;
-
-      if (typeof item.index === 'number' && item.index >= 0 && item.index < pois.length) {
-        poi = pois[item.index];
-      } else if (item.id) {
-        poi = pois.find(p => p.id === item.id);
-      }
-
-      if (poi) {
-        waypoints.push(poi.location);
-        poiIds.push(poi.id);
-      } else if (item.lat !== undefined && item.lng !== undefined) {
-        waypoints.push({ lat: item.lat, lng: item.lng });
-      }
-    }
-
-    return { waypoints, poiIds };
-  }
-
-  /**
-   * Builds the generation prompt for a given route.
-   * 
-   * @param origin - The origin of the route.
-   * @param preferences - The preferences for the route.
-   * @param searchSpace - The search space for the route.
-   * @param pois - The POIs for the route.
-   * @param routeType - The type of route.
-   * @returns The generation prompt.
-   */
-  private buildGenerationPrompt(
+  private generateCandidatesAlgorithmic(
     origin: LatLng,
     preferences: ParsedPreferences,
     _searchSpace: SearchSpace,
     pois: RankedPOI[],
+    strategy: OptimizationStrategy,
     routeType: RouteType
-  ): string {
-    const distanceConstraint = preferences.constraints.hard.find(c => c.type === 'distance');
-    let targetMiles: number;
-    if (distanceConstraint && typeof distanceConstraint.value === 'number' && !Number.isNaN(distanceConstraint.value)) {
-      const raw = distanceConstraint.value;
-      const isKm = distanceConstraint.unit === 'km' || (distanceConstraint.unit && distanceConstraint.unit.toLowerCase().startsWith('k'));
-      targetMiles = isKm ? raw * 0.621371 : raw;
-    } else {
-      targetMiles = DISTANCE_CONSTANTS.DEFAULT_DISTANCE_MILES;
+  ): WaypointSequence[] {
+    const targetDistance = this.getTargetDistance(preferences);
+    const candidates: WaypointSequence[] = [];
+
+    // Generate 3 distinct route strategies with POI diversification
+    try {
+      const usedPOIIds = new Set<string>();
+
+      // Strategy 1: SCENIC - Prioritize scenic POIs (parks, viewpoints, water)
+      const scenic = this.generateScenicRoute(origin, pois, strategy, targetDistance, routeType, usedPOIIds);
+      if (scenic.poiIds) {
+        scenic.poiIds.forEach(id => usedPOIIds.add(id));
+      }
+      candidates.push(scenic);
+
+      // Strategy 2: BALANCED - Mix of POI types and efficient path (excludes POIs from Scenic)
+      const balanced = this.generateBalancedRoute(origin, pois, strategy, targetDistance, routeType, usedPOIIds);
+      if (balanced.poiIds) {
+        balanced.poiIds.forEach(id => usedPOIIds.add(id));
+      }
+      candidates.push(balanced);
+
+      // Strategy 3: ADVENTUROUS - Explore farther, more diverse POIs (excludes POIs from Scenic + Balanced)
+      const adventurous = this.generateAdventurousRoute(origin, pois, strategy, targetDistance, routeType, usedPOIIds);
+      candidates.push(adventurous);
+    } catch (error) {
+      console.error('[WaypointOptimizer] Algorithm generation failed:', error);
     }
 
-    if (this.isAdvancedModel) {
-      return this.buildRichPrompt(origin, targetMiles, routeType, pois);
-    } else {
-      return this.buildSimplePrompt(origin, targetMiles, routeType, pois);
+    // Filter out invalid candidates
+    return candidates.filter(c => c.waypoints.length >= ROUTE_CONSTANTS.MIN_WAYPOINTS);
+  }
+
+  /**
+   * Generate SCENIC route: STRICTLY prioritize scenic POIs.
+   * BUT always includes user-requested POI types for satisfaction.
+   */
+  private generateScenicRoute(
+    origin: LatLng,
+    pois: RankedPOI[],
+    strategy: OptimizationStrategy,
+    targetDistance: number,
+    routeType: RouteType,
+    usedPOIIds: Set<string> = new Set()
+  ): WaypointSequence {
+    // STRICT filter: ONLY scenic POIs (viewpoint, park, water, scenic, nature)
+    const scenicTypes: POIType[] = ['viewpoint', 'park', 'water', 'scenic', 'nature'];
+    const scenicPOIs = pois.filter(p => scenicTypes.includes(p.type) && !usedPOIIds.has(p.id));
+
+    // CRITICAL: Extract user-requested POI types from AI strategy
+    const userRequestedTypes = new Set<POIType>(
+      Object.keys(strategy.poiPriorities) as POIType[]
+    );
+
+    // Ensure at least one POI of each user-requested type is included
+    const requiredPOIs: RankedPOI[] = [];
+    for (const requestedType of userRequestedTypes) {
+      if (!scenicTypes.includes(requestedType)) {
+        // Find best POI of this type that hasn't been used (prefer fresh POIs for diversity)
+        const bestOfType = pois
+          .filter(p => p.type === requestedType && !usedPOIIds.has(p.id))
+          .sort((a, b) => b.score.composite - a.score.composite)[0];
+        if (bestOfType) {
+          requiredPOIs.push(bestOfType);
+        } else {
+          // Fallback: allow reuse if no fresh POIs available
+          const fallbackPOI = pois
+            .filter(p => p.type === requestedType)
+            .sort((a, b) => b.score.composite - a.score.composite)[0];
+          if (fallbackPOI) requiredPOIs.push(fallbackPOI);
+        }
+      }
     }
-  }
 
-  /**
-   * Builds the rich prompt for a given route.
-   * 
-   * @param origin - The origin of the route.
-   * @param targetMiles - The target miles for the route.
-   * @param routeType - The type of route.
-   * @param pois - The POIs for the route.
-   * @returns The rich prompt.
-   */
-  private buildRichPrompt(
-    origin: LatLng,
-    targetMiles: number,
-    routeType: RouteType,
-    pois: RankedPOI[]
-  ): string {
-    const isLoop = routeType === ROUTE_MODE.WALK;
-    const limit = ROUTE_CONSTANTS.MAX_POIS_IN_PROMPT_RICH;
-    const poisList = pois.slice(0, limit);
-    const poiContext = poisList.map((p, i) =>
-      `${i}: [id: ${p.id}] ${p.name} (${p.type}, Rating: ${p.rating ?? 'N/A'}) at ${p.location.lat.toFixed(5)}, ${p.location.lng.toFixed(5)}`
-    ).join('\n');
+    // Combine: scenic POIs + required user preferences
+    const usePOIs = scenicPOIs.length >= 3
+      ? [...scenicPOIs, ...requiredPOIs]
+      : [...scenicPOIs, ...requiredPOIs, ...pois.filter(p => !scenicTypes.includes(p.type) && !requiredPOIs.some(r => r.id === p.id)).slice(0, 10)];
 
-    return `STARTING LOCATION: ${origin.lat.toFixed(5)}, ${origin.lng.toFixed(5)}
+    // Weights strongly favor scenic beauty, allow going farther
+    const weights: NearestNeighborWeights = {
+      scoreWeight: 2.0,     // Highest quality scenic spots
+      distanceWeight: 0.2,  // Willing to go far for scenic spots
+      typeWeight: 3.0,      // HEAVILY favor scenic types
+      diversityBonus: 0.3,  // Less focus on diversity, more on scenic quality
+    };
 
-AVAILABLE POIs. You may refer to each by "index" (0, 1, 2, ...) or by "id" (exact string below):
-${poiContext}
-
-TASK:
-1. Create a ${isLoop ? 'Loop (Walk/Jog)' : 'Point-to-Point (Explore)'} route of ~${targetMiles} miles.
-2. Pick 5-8 POIs and put them in a logical order. Use "index" (number) or "id" (string) for each.
-3. ${isLoop ? 'End near the start (loop back).' : 'Progress logically through the area.'}
-
-RESPONSE FORMAT (JSON ONLY). Example with index: {"sequence": [{"index": 0}, {"index": 5}]}. Or use "id" with exact ID string.
-{
-  "sequence": [
-    {"index": 0},
-    {"index": 5},
-    {"index": 2}
-  ]
-}`;
-  }
-
-  /**
-   * Builds the simple prompt for a given route.
-   * 
-   * @param origin - The origin of the route.
-   * @param targetMiles - The target miles for the route.
-   * @param routeType - The type of route.
-   * @param pois - The POIs for the route.
-   * @returns The simple prompt.
-   */
-  private buildSimplePrompt(
-    origin: LatLng,
-    targetMiles: number,
-    routeType: RouteType,
-    pois: RankedPOI[]
-  ): string {
-    const isLoop = routeType === ROUTE_MODE.WALK;
-    const poisList = pois.slice(0, ROUTE_CONSTANTS.MAX_POIS_IN_PROMPT_SIMPLE);
-    const poiListStr = poisList.map((p, i) => `${i}: ${p.name} (${p.type})`).join(', ');
-
-    return `Create a ${targetMiles} mile ${isLoop ? 'loop' : 'trip'} from ${origin.lat}, ${origin.lng}.
-POIs by index: ${poiListStr}
-Return JSON with "index" (number) for each POI, e.g. {"sequence": [{"index": 0}, {"index": 2}]}`;
-  }
-
-  /**
-   * Filters waypoints to ensure they are within the search space.
-   * 
-   * @param waypoints - The waypoints to filter.
-   * @param searchSpace - The search space to filter the waypoints within.
-   * @returns The filtered waypoints.
-   */
-  private filterWaypointsInBounds(waypoints: LatLng[], searchSpace: SearchSpace): LatLng[] {
-    const bounds = searchSpace.boundary.coordinates[0];
-    const minLng = Math.min(...bounds.map(c => c[0]));
-    const maxLng = Math.max(...bounds.map(c => c[0]));
-    const minLat = Math.min(...bounds.map(c => c[1]));
-    const maxLat = Math.max(...bounds.map(c => c[1]));
-
-    return waypoints.filter(wp =>
-      wp.lat >= minLat && wp.lat <= maxLat &&
-      wp.lng >= minLng && wp.lng <= maxLng
+    return this.nearestNeighborRoute(
+      origin,
+      usePOIs,
+      strategy,
+      targetDistance,
+      weights,
+      ROUTE_STRATEGIES.SCENIC,
+      routeType
     );
   }
 
   /**
-   * Creates a variation of a given waypoints sequence.
-   * 
-   * @param waypoints - The waypoints to create a variation of.
-   * @param searchSpace - The search space to create a variation within.
-   * @param routeType - The type of route.
-   * @param origin - The origin of the route.
-   * @returns The created variation.
+   * Generate BALANCED route: efficient path with good POI mix.
+   * Prioritizes nearby high-scoring POIs and ensures user preferences are met.
    */
-  private createVariation(
-    waypoints: LatLng[],
-    searchSpace: SearchSpace,
+  private generateBalancedRoute(
+    origin: LatLng,
+    pois: RankedPOI[],
+    strategy: OptimizationStrategy,
+    targetDistance: number,
     routeType: RouteType,
-    origin?: LatLng
-  ): LatLng[] {
-    const variation = waypoints.map((wp, i) => {
-      if (i === 0) return wp;
-      return {
-        lat: wp.lat + (Math.random() - 0.5) * DISTANCE_CONSTANTS.WAYPOINT_PERTURBATION_DEG,
-        lng: wp.lng + (Math.random() - 0.5) * DISTANCE_CONSTANTS.WAYPOINT_PERTURBATION_DEG,
-      };
-    });
+    usedPOIIds: Set<string> = new Set()
+  ): WaypointSequence {
+    // Use top 60% of POIs by score, excluding already used ones for diversity
+    const topPOIs = pois
+      .slice()
+      .filter(p => !usedPOIIds.has(p.id))
+      .sort((a, b) => b.score.composite - a.score.composite)
+      .slice(0, Math.ceil(pois.length * 0.6));
 
-    const validVariation = this.filterWaypointsInBounds(variation, searchSpace);
-    if (routeType === ROUTE_MODE.WALK && origin && validVariation.length > 0) {
-      validVariation.push(origin);
+    // CRITICAL: Ensure at least one POI of each user-requested type
+    const userRequestedTypes = new Set<POIType>(
+      Object.keys(strategy.poiPriorities) as POIType[]
+    );
+    const requiredPOIs: RankedPOI[] = [];
+    for (const requestedType of userRequestedTypes) {
+      // Prefer unused POIs for diversity
+      const bestOfType = pois
+        .filter(p => p.type === requestedType && !usedPOIIds.has(p.id))
+        .sort((a, b) => b.score.composite - a.score.composite)[0];
+      if (bestOfType && !topPOIs.some(p => p.id === bestOfType.id)) {
+        requiredPOIs.push(bestOfType);
+      } else if (!bestOfType) {
+        // Fallback: allow reuse if necessary
+        const fallback = pois
+          .filter(p => p.type === requestedType)
+          .sort((a, b) => b.score.composite - a.score.composite)[0];
+        if (fallback && !topPOIs.some(p => p.id === fallback.id)) {
+          requiredPOIs.push(fallback);
+        }
+      }
     }
 
-    return validVariation;
+    // Combine top POIs with required user preferences
+    const usePOIs = [...topPOIs, ...requiredPOIs];
+
+    // Balanced weights - equal importance to all factors
+    const weights: NearestNeighborWeights = {
+      scoreWeight: 1.2,
+      distanceWeight: 1.2,  // Favor nearby POIs for efficiency
+      typeWeight: 1.0,
+      diversityBonus: strategy.diversityWeight * 2.5,
+    };
+
+    return this.nearestNeighborRoute(
+      origin,
+      usePOIs,
+      strategy,
+      targetDistance,
+      weights,
+      ROUTE_STRATEGIES.BALANCED,
+      routeType
+    );
   }
 
   /**
-   * Generates a greedy route from a given set of POIs.
-   * 
-   * @param origin - The origin of the route.
-   * @param preferences - The preferences for the route.
-   * @param searchSpace - The search space for the route.
-   * @param pois - The POIs for the route.
-   * @param n - The number of candidates to generate.
-   * @returns The generated greedy route.
+   * Generate ADVENTUROUS route: explore farther, discover hidden gems.
+   * Prioritizes less-visited POIs but ensures user preferences are met.
    */
-  private greedyGenerate(
+  private generateAdventurousRoute(
     origin: LatLng,
-    _preferences: ParsedPreferences,
-    _searchSpace: SearchSpace,
     pois: RankedPOI[],
-    _n: number
-  ): WaypointSequence[] {
-    const selectedPOIs = pois.slice(0, ROUTE_CONSTANTS.MAX_POIS_GREEDY);
-    const waypoints = [origin, ...selectedPOIs.map(p => p.location), origin];
-    const poiIds = selectedPOIs.map(p => p.id);
+    strategy: OptimizationStrategy,
+    targetDistance: number,
+    routeType: RouteType,
+    usedPOIIds: Set<string> = new Set()
+  ): WaypointSequence {
+    // Use farther POIs: sort by distance from origin, take middle 60% (skip closest and extreme outliers)
+    // IMPORTANT: Exclude already used POIs for diversity
+    const sortedByDistance = pois
+      .slice()
+      .filter(p => !usedPOIIds.has(p.id))
+      .map(p => ({ poi: p, dist: haversineDistance(origin, p.location) }))
+      .sort((a, b) => a.dist - b.dist);
 
-    return [{
-      waypoints,
-      poiIds,
-      strategy: ROUTE_STRATEGIES.BALANCED,
-    }];
+    const startIdx = Math.floor(sortedByDistance.length * 0.2);
+    const endIdx = Math.ceil(sortedByDistance.length * 0.8);
+    const farPOIs = sortedByDistance.slice(startIdx, endIdx).map(x => x.poi);
+
+    // CRITICAL: Ensure at least one POI of each user-requested type
+    const userRequestedTypes = new Set<POIType>(
+      Object.keys(strategy.poiPriorities) as POIType[]
+    );
+    const requiredPOIs: RankedPOI[] = [];
+    for (const requestedType of userRequestedTypes) {
+      // Prefer unused POIs
+      const bestOfType = pois
+        .filter(p => p.type === requestedType && !usedPOIIds.has(p.id))
+        .sort((a, b) => b.score.composite - a.score.composite)[0];
+      if (bestOfType && !farPOIs.some(p => p.id === bestOfType.id)) {
+        requiredPOIs.push(bestOfType);
+      } else if (!bestOfType) {
+        // Fallback: allow reuse
+        const fallback = pois
+          .filter(p => p.type === requestedType)
+          .sort((a, b) => b.score.composite - a.score.composite)[0];
+        if (fallback && !farPOIs.some(p => p.id === fallback.id)) {
+          requiredPOIs.push(fallback);
+        }
+      }
+    }
+
+    // Combine far POIs with required user preferences
+    const usePOIs = [...farPOIs, ...requiredPOIs];
+
+    // Adjust target distance based on AI risk tolerance
+    const adjustedDistance = targetDistance * (1 + strategy.riskTolerance * 0.4);
+
+    // Adventurous weights: favor diversity and farther exploration
+    const weights: NearestNeighborWeights = {
+      scoreWeight: 1.0,
+      distanceWeight: 0.4,  // Very willing to explore farther
+      typeWeight: 0.7,
+      diversityBonus: strategy.diversityWeight * 4,  // MAXIMUM diversity
+    };
+
+    return this.nearestNeighborRoute(
+      origin,
+      usePOIs,
+      strategy,
+      adjustedDistance,
+      weights,
+      ROUTE_STRATEGIES.ADVENTUROUS,
+      routeType
+    );
   }
 
+  /**
+   * Core nearest-neighbor algorithm with AI-guided scoring.
+   * 
+   * Greedy algorithm that selects next POI based on weighted score considering:
+   * - POI composite score (from POIDiscoverer)
+   * - Distance from current point
+   * - POI type match with AI priorities
+   * - Diversity bonus for new POI types
+   * - Loop closure constraint
+   */
+  private nearestNeighborRoute(
+    origin: LatLng,
+    pois: RankedPOI[],
+    strategy: OptimizationStrategy,
+    targetDistance: number,
+    weights: NearestNeighborWeights,
+    routeStrategy: RouteStrategy,
+    routeType: RouteType
+  ): WaypointSequence {
+    const waypoints: LatLng[] = [origin];
+    const poiIds: string[] = [];
+    const usedTypes = new Set<POIType>();
+    const used = new Set<string>();
+    let cumulativeDistance = 0;
+
+    const roadFactor = 1.7;  // Road distance is ~1.7x straight-line in urban areas
+    const maxPOIs = routeType === ROUTE_MODE.WALK ? 4 : 5;
+    const minPOISpacing = DISTANCE_CONSTANTS.MIN_POI_SPACING_M;
+
+    while (cumulativeDistance < targetDistance * 0.85 && poiIds.length < maxPOIs) {
+      const lastPoint = waypoints[waypoints.length - 1];
+
+      // Score each unused POI
+      const candidates = pois
+        .filter(p => !used.has(p.id))
+        .map(p => {
+          const distToPoint = haversineDistance(lastPoint, p.location);
+
+          // Skip if too close to any existing waypoint
+          if (distToPoint < minPOISpacing) return null;
+
+          const score = this.scorePOIForRoute(
+            p,
+            lastPoint,
+            origin,
+            strategy,
+            weights,
+            usedTypes,
+            cumulativeDistance,
+            targetDistance
+          );
+
+          return { poi: p, score, distance: distToPoint };
+        })
+        .filter((c): c is NonNullable<typeof c> => c !== null)
+        .sort((a, b) => b.score - a.score);
+
+      if (candidates.length === 0) break;
+
+      const best = candidates[0];
+      const distToPOI = best.distance * roadFactor;
+      const distBackToOrigin = haversineDistance(best.poi.location, origin) * roadFactor;
+
+      // Check if adding this POI keeps us within target distance (with buffer)
+      if (cumulativeDistance + distToPOI + distBackToOrigin > targetDistance * 1.15) {
+        break;
+      }
+
+      waypoints.push(best.poi.location);
+      poiIds.push(best.poi.id);
+      used.add(best.poi.id);
+      usedTypes.add(best.poi.type);
+      cumulativeDistance += distToPOI;
+    }
+
+    // Close loop for walk routes
+    if (routeType === ROUTE_MODE.WALK && waypoints.length > 1) {
+      waypoints.push(origin);
+    }
+
+    return {
+      waypoints,
+      poiIds,
+      strategy: routeStrategy,
+    };
+  }
+
+  /**
+   * Score a POI for route inclusion using AI-guided weights.
+   * 
+   * Combines multiple factors:
+   * - POI intrinsic quality (composite score)
+   * - Distance efficiency
+   * - Type match with AI priorities
+   * - Diversity bonus
+   * - Distance budget remaining
+   */
+  private scorePOIForRoute(
+    poi: RankedPOI,
+    currentPoint: LatLng,
+    origin: LatLng,
+    strategy: OptimizationStrategy,
+    weights: NearestNeighborWeights,
+    usedTypes: Set<POIType>,
+    cumulativeDistance: number,
+    targetDistance: number
+  ): number {
+    // Base score from POI quality
+    let score = poi.score.composite * weights.scoreWeight;
+
+    // Distance factor (closer is better, but not too much weight)
+    const distToPoint = haversineDistance(currentPoint, poi.location);
+    const distScore = Math.max(0, 10 - (distToPoint / 100));  // Normalize to 0-10
+    score += distScore * weights.distanceWeight;
+
+    // Type match with AI priorities (this is the AI guidance!)
+    const typePriority = strategy.poiPriorities[poi.type] || 1.0;
+    score += typePriority * 5 * weights.typeWeight;
+
+    // Diversity bonus for new POI types
+    if (!usedTypes.has(poi.type)) {
+      score += weights.diversityBonus * 3;
+    }
+
+    // Budget remaining factor (prefer POIs that fit well in remaining distance)
+    const remainingBudget = targetDistance - cumulativeDistance;
+    const distBackToOrigin = haversineDistance(poi.location, origin);
+    const totalDistNeeded = (distToPoint + distBackToOrigin) * 1.7;
+
+    if (totalDistNeeded < remainingBudget * 0.5) {
+      score += 2;  // Bonus for POIs that leave room for more
+    } else if (totalDistNeeded > remainingBudget * 1.2) {
+      score -= 5;  // Penalty for POIs that risk exceeding budget
+    }
+
+    return score;
+  }
+
+  /**
+   * Get target distance from preferences (in meters).
+   */
+  private getTargetDistance(preferences: ParsedPreferences): number {
+    const distanceConstraint = preferences.constraints.hard.find(c => c.type === 'distance');
+    if (distanceConstraint && typeof distanceConstraint.value === 'number') {
+      const value = distanceConstraint.value;
+      const isKm = distanceConstraint.unit === 'km';
+      return isKm ? value * 1000 : value * 1609.34;  // Convert to meters
+    }
+    return DISTANCE_CONSTANTS.DEFAULT_RADIUS_M * 2;  // Default to 10km
+  }
+
+  /**
+   * Evaluate a waypoint sequence against preferences and POIs.
+   */
   private evaluateRoute(
     route: WaypointSequence,
     preferences: ParsedPreferences,
-    pois: RankedPOI[]
+    pois: RankedPOI[],
+    strategy: OptimizationStrategy
   ): EvaluatedRoute {
     const distanceMatch = this.evalDistanceMatch(route, preferences);
-    const scenicQuality = this.evalScenic(route, preferences);
-    const poiSatisfaction = this.evalPOIs(route, pois);
+    const scenicQuality = this.evalScenic(route, pois);
+    const poiSatisfaction = this.evalPOIs(route, pois, strategy);
     const diversity = this.evalDiversity(route, pois);
-    // Safety needs route segments (from directions); real safety is computed in orchestrator after validation
-    const safetyScore = 5;
+    const safetyScore = 5;  // Placeholder, real safety computed after validation
 
     const objectives: Record<string, number> = {
       distance_match: distanceMatch,
       distance_accuracy: distanceMatch,
-      distance_deviation: distanceMatch,
       scenic_quality: scenicQuality,
       scenic_score: scenicQuality,
       safety_score: safetyScore,
@@ -407,6 +526,9 @@ Return JSON with "index" (number) for each POI, e.g. {"sequence": [{"index": 0},
     };
   }
 
+  /**
+   * Evaluate distance accuracy.
+   */
   private evalDistanceMatch(route: WaypointSequence, preferences: ParsedPreferences): number {
     const distanceConstraint = preferences.constraints.hard.find(c => c.type === 'distance');
     if (!distanceConstraint) return 1.0;
@@ -416,50 +538,91 @@ Return JSON with "index" (number) for each POI, e.g. {"sequence": [{"index": 0},
       totalDistance += haversineDistance(route.waypoints[i], route.waypoints[i + 1]);
     }
 
-    const targetDistance = typeof distanceConstraint.value === 'number'
-      ? (distanceConstraint.unit === 'km' ? distanceConstraint.value * 1000 : distanceConstraint.value * 1609.34)
-      : DISTANCE_CONSTANTS.DEFAULT_RADIUS_M;
-
+    const targetDistance = this.getTargetDistance(preferences);
     if (targetDistance === 0) return 1.0;
 
     const deviation = Math.abs(totalDistance - targetDistance) / targetDistance;
-    return Math.max(0, 1 - deviation);
+    return Math.max(0, 1 - deviation) * 10;
   }
 
-  private evalScenic(_route: WaypointSequence, preferences: ParsedPreferences): number {
-    const scenicWeight = preferences.constraints.soft.find(c => c.type === 'scenic')?.weight || 0.5;
-    return scenicWeight * 10;
-  }
+  /**
+   * Evaluate scenic quality based on POI types.
+   */
+  private evalScenic(route: WaypointSequence, pois: RankedPOI[]): number {
+    if (!route.poiIds || route.poiIds.length === 0) return 5;
 
-  private evalPOIs(route: WaypointSequence, pois: RankedPOI[]): number {
-    if (!route.poiIds?.length) return 0;
-    const byId = new Map(pois.map((p) => [p.id, p]));
-    let score = 0;
+    const poiMap = new Map(pois.map(p => [p.id, p]));
+    const scenicTypes: Set<POIType> = new Set(['viewpoint', 'park', 'water', 'scenic']);
+
+    let scenicCount = 0;
+    let totalScore = 0;
+
     for (const id of route.poiIds) {
-      const poi = byId.get(id);
-      if (poi?.score?.composite != null) {
-        score += poi.score.composite;
-      } else {
-        score += 1.5;
+      const poi = poiMap.get(id);
+      if (poi) {
+        if (scenicTypes.has(poi.type)) {
+          scenicCount++;
+          totalScore += poi.score.composite * 1.5;
+        } else {
+          totalScore += poi.score.composite;
+        }
       }
     }
-    return Math.min(10, score);
+
+    const baseScore = totalScore / Math.max(1, route.poiIds.length);
+    const scenicBonus = (scenicCount / Math.max(1, route.poiIds.length)) * 3;
+
+    return Math.min(10, baseScore + scenicBonus);
   }
 
-  /** Diversity: variety of POI types in the route (more types = higher score). */
-  private evalDiversity(route: WaypointSequence, pois: RankedPOI[]): number {
-    if (!route.poiIds?.length) return 0;
-    const byId = new Map(pois.map((p) => [p.id, p]));
-    const types = new Set<string>();
+  /**
+   * Evaluate POI satisfaction with AI strategy guidance.
+   */
+  private evalPOIs(route: WaypointSequence, pois: RankedPOI[], strategy: OptimizationStrategy): number {
+    if (!route.poiIds || route.poiIds.length === 0) return 0;
+
+    const poiMap = new Map(pois.map(p => [p.id, p]));
+    let score = 0;
+
     for (const id of route.poiIds) {
-      const poi = byId.get(id);
-      if (poi?.type) types.add(poi.type);
+      const poi = poiMap.get(id);
+      if (poi) {
+        // Base score from POI quality
+        let poiScore = poi.score.composite;
+
+        // AI priority bonus
+        const typePriority = strategy.poiPriorities[poi.type] || 1.0;
+        poiScore *= typePriority;
+
+        score += poiScore;
+      }
     }
-    // 0–6+ unique types → scale to 0–10 (e.g. 1 type ≈ 1.5, 4 types ≈ 6.5, 6+ ≈ 10)
-    const uniqueCount = types.size;
-    return Math.min(10, uniqueCount * (10 / 6));
+
+    return Math.min(10, score / Math.max(1, route.poiIds.length) * 1.5);
   }
 
+  /**
+   * Evaluate diversity (variety of POI types).
+   */
+  private evalDiversity(route: WaypointSequence, pois: RankedPOI[]): number {
+    if (!route.poiIds || route.poiIds.length === 0) return 0;
+
+    const poiMap = new Map(pois.map(p => [p.id, p]));
+    const types = new Set<POIType>();
+
+    for (const id of route.poiIds) {
+      const poi = poiMap.get(id);
+      if (poi) types.add(poi.type);
+    }
+
+    // More unique types = higher diversity score
+    const uniqueCount = types.size;
+    return Math.min(10, uniqueCount * (10 / 5));  // 5 types = perfect score
+  }
+
+  /**
+   * Compute composite score from objectives.
+   */
   private computeComposite(objectives: Record<string, number>, preferences: ParsedPreferences): number {
     let total = 0;
     let totalWeight = 0;
@@ -473,8 +636,10 @@ Return JSON with "index" (number) for each POI, e.g. {"sequence": [{"index": 0},
     return totalWeight > 0 ? total / totalWeight : 7.5;
   }
 
-  private assignLabel(_route: EvaluatedRoute, index: number): string {
-    const labels = Object.values(ROUTE_STRATEGIES);
-    return labels[index] || ROUTE_STRATEGIES.BALANCED;
+  /**
+   * Assign label based on strategy.
+   */
+  private assignLabel(route: EvaluatedRoute): string {
+    return route.waypoints.strategy || ROUTE_STRATEGIES.BALANCED;
   }
 }

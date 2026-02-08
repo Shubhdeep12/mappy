@@ -1,13 +1,6 @@
 /**
- * LLM Provider Interface
- * 
- * Defines the contract for language model providers.
+ * LLM Provider Interface - Defines contract for language model providers.
  * Implementations: OllamaProvider (dev), GeminiProvider (prod)
- * 
- * Methods:
- * - generate(): Text completion
- * - generateJSON(): Structured JSON output with schema validation
- * - healthCheck(): Provider availability check
  */
 
 export interface LLMProvider {

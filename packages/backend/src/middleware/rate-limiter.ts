@@ -1,26 +1,5 @@
 /**
- * Rate Limiting Middleware
- * 
- * Implements token bucket algorithm for request rate limiting.
- * Protects API from abuse and manages resource usage.
- * 
- * Limits:
- * - Per-user: 10 requests/minute
- * - Per-IP: 30 requests/minute
- * - Burst allowance: 3 requests
- * 
- * Strategy:
- * - Token bucket with configurable window and max requests
- * - Exponential backoff with jitter for rate limit exceeded
- * - Rate limit headers in response (X-RateLimit-*)
- * 
- * Storage:
- * - In-memory for development
- * - Redis for production (distributed rate limiting)
- * 
- * Error response:
- * - 429 Too Many Requests
- * - Retry-After header with backoff time
+ * Rate Limiting Middleware - Token bucket algorithm (max 10 req/min).
  */
 
 import rateLimit from 'express-rate-limit';

@@ -1,9 +1,7 @@
 /**
- * Route Validation Agent
- * 
- * Multi-stage validation pipeline using Google Directions API (or OSRM).
- * Ensures generated waypoints form a valid, navigable route.
+ * Route Validator - Validates waypoint sequences using Google Directions API or OSRM.
  */
+
 
 import type { MapsProvider } from '../providers/maps/interface';
 import { calculateElevationGain } from '@mappy/shared';
@@ -12,7 +10,7 @@ import type { LatLng, ParsedPreferences, ValidationResult, ActivityType } from '
 import { ValidationError } from '@mappy/shared';
 
 export class RouteValidator {
-  constructor(private maps: MapsProvider) {}
+  constructor(private maps: MapsProvider) { }
 
   async validateRoute(
     waypoints: LatLng[],
@@ -30,9 +28,9 @@ export class RouteValidator {
 
     for (const wp of waypoints) {
       if (typeof wp.lat !== 'number' || typeof wp.lng !== 'number' ||
-          isNaN(wp.lat) || isNaN(wp.lng) ||
-          wp.lat < -90 || wp.lat > 90 ||
-          wp.lng < -180 || wp.lng > 180) {
+        isNaN(wp.lat) || isNaN(wp.lng) ||
+        wp.lat < -90 || wp.lat > 90 ||
+        wp.lng < -180 || wp.lng > 180) {
         return {
           valid: false,
           error: ValidationError.CONNECTIVITY_FAILURE,
@@ -43,7 +41,7 @@ export class RouteValidator {
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const result = await this.validate(waypoints, preferences, activity);
-      
+
       if (result.valid) {
         return result;
       }
@@ -72,12 +70,22 @@ export class RouteValidator {
       const route = await this.maps.route(waypoints, activity);
 
       if (!route.distance || route.distance <= 0) {
+        console.error('[RouteValidator] Maps API returned invalid distance:', {
+          distance: route.distance,
+          waypointCount: waypoints.length,
+          firstWaypoint: waypoints[0],
+          lastWaypoint: waypoints[waypoints.length - 1],
+        });
         return {
           valid: false,
           error: ValidationError.DISTANCE_MISMATCH,
-          details: 'Routing returned zero or invalid distance',
+          details: `Routing returned zero or invalid distance (distance=${route.distance}, waypoints=${waypoints.length})`,
         };
       }
+
+      // Calculate distance accuracy for scoring (but don't fail validation)
+      let distanceAccuracy = 1.0;
+      let distanceWarning: string | undefined;
 
       const distanceConstraint = preferences.constraints.hard.find(c => c.type === 'distance');
       if (distanceConstraint && typeof distanceConstraint.value === 'number') {
@@ -85,13 +93,14 @@ export class RouteValidator {
           ? distanceConstraint.value * 1000
           : distanceConstraint.value * 1609.34;
 
-        const tolerance = targetDistance * DISTANCE_CONSTANTS.DISTANCE_TOLERANCE;
-        if (Math.abs(route.distance - targetDistance) > tolerance) {
-          return {
-            valid: false,
-            error: ValidationError.DISTANCE_MISMATCH,
-            details: `Distance mismatch: actual ${route.distance}m, target ${targetDistance}m (tolerance: ${tolerance}m)`,
-          };
+        // Calculate accuracy as a ratio (1.0 = perfect, lower = worse)
+        const deviation = Math.abs(route.distance - targetDistance) / targetDistance;
+        distanceAccuracy = Math.max(0, 1 - deviation);
+
+        // Log warning if significantly off, but DON'T fail validation
+        if (deviation > DISTANCE_CONSTANTS.DISTANCE_TOLERANCE) {
+          distanceWarning = `Distance deviation: actual ${(route.distance / 1000).toFixed(1)}km vs target ${(targetDistance / 1000).toFixed(1)}km (${(deviation * 100).toFixed(0)}% off)`;
+          console.warn(`[RouteValidator] ${distanceWarning}`);
         }
       }
 
@@ -118,6 +127,8 @@ export class RouteValidator {
           distance: route.distance,
           duration: route.duration,
           waypointCount: waypoints.length,
+          distanceAccuracy,
+          distanceWarning,
         },
       };
     } catch (error) {

@@ -19,6 +19,7 @@
     "@googlemaps/routing": "^2.1.1",
     "@mappy/shared": "workspace:*",
     "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "geolib": "^3.3.4",

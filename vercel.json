@@ -1,6 +1,0 @@
-{
-  "buildCommand": "pnpm run build",
-  "outputDirectory": "packages/frontend/dist",
-  "installCommand": "corepack enable && pnpm install --prod=false --frozen-lockfile",
-  "framework": null
-}

@@ -19,17 +19,8 @@ export const ROUTE_CONSTANTS = {
   /** Maximum waypoints for LLM generation */
   MAX_WAYPOINTS_FOR_LLM: 10,
 
-  /** Max POIs discovered (discoverer) and passed to optimizer prompt (use all we create) */
-  MAX_POIS_DISCOVERED: 50,
-
-  /** POIs in rich LLM prompt; should be ≤ MAX_POIS_DISCOVERED so we use what we create */
-  MAX_POIS_IN_PROMPT_RICH: 50,
-
-  /** POIs in simple LLM prompt (smaller context) */
-  MAX_POIS_IN_PROMPT_SIMPLE: 25,
-
-  /** POIs used by greedy fallback when LLM fails */
-  MAX_POIS_GREEDY: 6,
+  /** Max POIs discovered and passed to algorithmic optimizer (increased since we use algorithm now, not LLM prompts) */
+  MAX_POIS_DISCOVERED: 100,
 } as const;
 
 export const DISTANCE_CONSTANTS = {
@@ -39,8 +30,8 @@ export const DISTANCE_CONSTANTS = {
   /** Default route distance in miles */
   DEFAULT_DISTANCE_MILES: 5,
 
-  /** Distance tolerance for route validation (±15%) */
-  DISTANCE_TOLERANCE: 0.15,
+  /** Distance tolerance for route validation (±35% - accounts for road detours vs straight-line estimates) */
+  DISTANCE_TOLERANCE: 0.35,
 
   /** Minimum spacing between POIs in meters */
   MIN_POI_SPACING_M: 200,

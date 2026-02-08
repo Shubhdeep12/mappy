@@ -1,18 +1,8 @@
 /**
- * Application Configuration
- * 
- * Loads and validates environment variables.
- * Provides typed configuration for:
- * - Environment mode (development/production)
- * - Free mode provider settings (Ollama endpoint, OSM endpoints)
- * - Server settings (port, host)
- * - Rate limiting configuration
- * - Cache settings
- * 
- * Note: API keys (Gemini, Google Maps) are no longer supported via env vars.
- * Users provide their own API keys via the UI for Premium Mode.
- * Free Mode (Ollama + OSM) is the default fallback.
+ * App Configuration - Loads environment variables for server, LLM, maps, rate limiting, and cache.
+ * API keys (Gemini/Google Maps) are provided via UI, not env vars.
  */
+
 
 export interface AppConfig {
   env: 'development' | 'production';

@@ -22,6 +22,7 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { RouteCard } from './RouteCard';
 import { MappyLogo } from './MappyLogo';
+import { ThemeToggle } from './ThemeToggle';
 import { cn } from '../lib/utils';
 import { useRouteStore } from '../store/routeStore';
 import { RouteAPI } from '../api/client';
@@ -63,6 +64,7 @@ export function RouteGenerator() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [progressSteps, setProgressSteps] = useState<Array<{ step: string; message: string; completed: boolean }>>([]);
   const [manualCoords, setManualCoords] = useState({ lat: '', lng: '' });
   const [showManualCoords, setShowManualCoords] = useState(false);
   const [showApiKeys, setShowApiKeys] = useState(false);
@@ -70,6 +72,7 @@ export function RouteGenerator() {
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const apiRef = useRef(new RouteAPI());
+  const progressStepsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -96,6 +99,13 @@ export function RouteGenerator() {
       }
     }
   }, [location]);
+
+  // Auto-scroll to bottom when new progress step is added
+  useEffect(() => {
+    if (progressStepsRef.current) {
+      progressStepsRef.current.scrollTop = progressStepsRef.current.scrollHeight;
+    }
+  }, [progressSteps]);
 
   const addPreferenceHandler = () => {
     if (prefInput.trim()) {
@@ -248,23 +258,49 @@ export function RouteGenerator() {
 
     setIsGenerating(true);
     setError(null);
+    setProgressSteps([]);
 
     try {
-      const result = await apiRef.current.generateRoute({
-        preferences,
-        location,
-        context: {
-          routeType,
-          preferredDistanceUnit: distanceUnit,
+      const keysToSend =
+        localApiKeys.gemini.trim() || localApiKeys.googleMaps.trim()
+          ? {
+              gemini: localApiKeys.gemini.trim() || undefined,
+              googleMaps: localApiKeys.googleMaps.trim() || undefined,
+            }
+          : Object.keys(apiKeys).length > 0
+            ? apiKeys
+            : undefined;
+
+      const result = await apiRef.current.generateRouteWithProgress(
+        {
+          preferences,
+          location,
+          context: {
+            routeType,
+            preferredDistanceUnit: distanceUnit,
+          },
+          apiKeys: keysToSend,
         },
-        apiKeys: Object.keys(apiKeys).length > 0 ? apiKeys : undefined,
-      });
+        (event) => {
+          // Update progress steps: mark previous as complete, add new as current
+          setProgressSteps((prev) => {
+            const updated = prev.map(s => ({ ...s, completed: true }));
+            return [...updated, { step: event.step, message: event.message, completed: false }];
+          });
+        }
+      );
 
       setRoute(result.routes);
+      
+      // Mark all steps as completed
+      setProgressSteps((prev) => prev.map(s => ({ ...s, completed: true })));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate routes. Please try again.');
     } finally {
-      setIsGenerating(false);
+      setTimeout(() => {
+        setIsGenerating(false);
+        setProgressSteps([]);
+      }, 1000);
     }
   };
 
@@ -282,11 +318,12 @@ export function RouteGenerator() {
                 <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">AI Route Planning</p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Badge variant="cyan" className="gap-1.5 px-3 py-1 font-semibold border-slate-200 bg-slate-50 text-slate-600">
+            <div className="flex items-center gap-3">
+              <Badge variant="cyan" className="gap-1.5 px-3 py-1 font-semibold">
                 <Sparkles className="w-3.5 h-3.5" />
                 AI Powered
               </Badge>
+              <ThemeToggle />
             </div>
           </div>
         </div>
@@ -318,7 +355,7 @@ export function RouteGenerator() {
                 <Button 
                   onClick={addPreferenceHandler} 
                   size="lg" 
-                  className="px-6 h-12 shadow-lg bg-zinc-950 text-white hover:bg-zinc-800 border-b-2 border-zinc-800 active:border-b-0 active:translate-y-0.5"
+                  className="px-6 h-12 shadow-lg border-b-2 border-primary/80 active:border-b-0 active:translate-y-0.5"
                 >
                   <Plus className="w-5 h-5 mr-2" />
                   <span className="font-bold">Add</span>
@@ -400,12 +437,12 @@ export function RouteGenerator() {
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      className="absolute z-50 w-full mt-2 bg-white border border-border rounded-xl shadow-2xl max-h-64 overflow-y-auto">
+                      className="absolute z-50 w-full mt-2 bg-card border border-border rounded-xl shadow-2xl max-h-64 overflow-y-auto">
                       {locationSuggestions.map((suggestion, i) => (
                         <button
                           key={i}
                           onClick={() => selectSuggestion(suggestion)}
-                          className="w-full text-left px-5 py-4 hover:bg-zinc-100 bg-white transition-colors border-b border-border last:border-b-0 cursor-pointer">
+                          className="w-full text-left px-5 py-4 hover:bg-accent bg-card transition-colors border-b border-border last:border-b-0 cursor-pointer">
                           <p className="text-sm font-medium text-foreground">{suggestion.display_name}</p>
                           <p className="text-xs text-muted-foreground mt-1">
                             {parseFloat(suggestion.lat).toFixed(4)}, {parseFloat(suggestion.lon).toFixed(4)}
@@ -420,14 +457,14 @@ export function RouteGenerator() {
               <div className="flex gap-3">
                 <Button
                   variant="secondary"
-                  className="flex-1 h-11 gap-2 border-2 border-zinc-200 bg-zinc-50 hover:bg-zinc-100 shadow-sm font-bold text-zinc-900"
+                  className="flex-1 h-11 gap-2 border-2 shadow-sm font-bold"
                   onClick={handleCurrentLocation}>
                   <Navigation className="w-4 h-4 text-primary" />
                   Use Current Location
                 </Button>
                 <Button
                   variant="secondary"
-                  className="h-11 px-6 gap-2 border-2 border-zinc-200 bg-zinc-50 hover:bg-zinc-100 shadow-sm font-bold text-zinc-900"
+                  className="h-11 px-6 gap-2 border-2 shadow-sm font-bold"
                   onClick={() => setShowManualCoords(!showManualCoords)}>
                   <MapPin className="w-4 h-4 text-primary" />
                   Coords
@@ -557,7 +594,7 @@ export function RouteGenerator() {
                   <div className="flex items-center gap-2">
                     <Key className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm font-semibold text-foreground">
-                      {apiKeys.gemini || apiKeys.googleMaps ? '✨ Premium Connection Active' : 'API Keys (Optional)'}
+                      {apiKeys.gemini || apiKeys.googleMaps ? 'API keys set' : 'API Keys (Optional)'}
                     </span>
                   </div>
                   <motion.div
@@ -630,21 +667,22 @@ export function RouteGenerator() {
             </div>
 
             {/* Generate Button */}
-            <Button
-              size="lg"
-              className="w-full h-16 text-lg font-bold shadow-xl bg-zinc-950 text-white hover:bg-zinc-800 transition-all duration-200 group rounded-2xl border-b-4 border-zinc-800 active:border-b-0 active:translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:bg-zinc-400 disabled:border-zinc-300"
-              onClick={generateRoutes}
-              disabled={isGenerating || !location || preferences.length === 0}>
-              {isGenerating ?
-                <>
-                  <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                  Designing Your Journey...
-                </> :
-                <>
-                  Generate Custom Routes
-                </>
-              }
-            </Button>
+            <div className={`generate-button-wrapper shadow-xl ${!(isGenerating || !location || preferences.length === 0) ? 'active' : ''}`}>
+              <button
+                className="generate-button-shimmer w-full h-full flex items-center justify-center text-lg font-bold transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={generateRoutes}
+                disabled={isGenerating || !location || preferences.length === 0}>
+                {isGenerating ?
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    <span>Generating...</span>
+                  </> :
+                  <>
+                    Generate Custom Routes
+                  </>
+                }
+              </button>
+            </div>
 
             {/* Error Display */}
             {error && (
@@ -666,20 +704,60 @@ export function RouteGenerator() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="h-full flex items-center justify-center bg-secondary/30 border border-dashed border-border rounded-3xl p-12">
-                  <div className="text-center space-y-8">
-                    <div className="w-32 h-32 mx-auto text-foreground">
+                  className="h-full flex flex-col items-center justify-start bg-secondary/30 border border-dashed border-border rounded-3xl p-12 overflow-hidden">
+                  <div className="text-center max-w-md w-full shrink-0">
+                    {/* Fixed header section */}
+                    <div className="w-32 h-32 mx-auto text-foreground mb-6">
                       <MappyLogo animate />
                     </div>
-                    <div>
-                      <h3 className="text-2xl font-bold text-foreground mb-3">
-                        Crafting Your Routes...
-                      </h3>
-                      <p className="text-muted-foreground leading-relaxed">
-                        Our AI is analyzing scenic paths, safety, and your preferences.
-                      </p>
-                    </div>
+                    <h3 className="text-2xl font-bold text-foreground mb-8">
+                      Crafting Your Routes...
+                    </h3>
                   </div>
+
+                  {/* Scrollable Progress Steps Timeline */}
+                  {progressSteps.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-background/50 backdrop-blur-sm border border-border rounded-2xl p-4 text-left w-full max-w-md flex-1 overflow-hidden flex flex-col">
+                      <div ref={progressStepsRef} className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
+                        <div className="space-y-2">
+                          {progressSteps.map((step, index) => (
+                            <motion.div
+                              key={`${step.step}-${index}`}
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.05 }}
+                              className={cn(
+                                "flex items-start gap-3 p-3 rounded-lg transition-all",
+                                !step.completed && "bg-primary/10 border border-primary/20"
+                              )}>
+                              <div className="shrink-0 mt-0.5">
+                                {step.completed ? (
+                                  <div className="w-5 h-5 rounded-full bg-green-500/20 border-2 border-green-500 flex items-center justify-center">
+                                    <svg className="w-3 h-3 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </div>
+                                ) : (
+                                  <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={cn(
+                                  "text-sm font-medium leading-relaxed",
+                                  step.completed ? "text-muted-foreground" : "text-foreground"
+                                )}>
+                                  {step.message}
+                                </p>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
                 </motion.div>
               ) : !route || route.length === 0 ? (
                 <motion.div

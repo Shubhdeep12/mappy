@@ -13,9 +13,9 @@ const badgeVariants = cva(
         destructive:
           'border-transparent bg-destructive text-destructive-foreground shadow-sm',
         outline: 'text-foreground',
-        cyan: 'border-slate-200 bg-slate-50 text-slate-600 font-semibold tracking-tight',
-        purple: 'border-purple-200 bg-purple-50 text-purple-700',
-        emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700'
+        cyan: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 font-semibold tracking-tight',
+        purple: 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-950 dark:text-purple-300',
+        emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
       }
     },
     defaultVariants: {

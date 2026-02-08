@@ -88,18 +88,20 @@ export function RouteCard({ route, index, distanceUnit, apiKey }: RouteCardProps
         <div className="p-6 space-y-5">
           {/* Header */}
           <div>
-            <h3 className="text-xl font-bold text-foreground mb-3 leading-tight">
-              {route.narrative.summary || 'Generated Route'}
-            </h3>
+            <div className="mb-3">
+              <h3 className="text-xl font-bold text-foreground leading-tight">
+                {route.narrative.summary || 'Generated Route'}
+              </h3>
+            </div>
             <div className="flex flex-wrap gap-5 text-sm font-medium text-muted-foreground">
               <div className="flex items-center gap-2">
                 <Navigation className="w-4 h-4 text-primary" />
                 <span>{formatDistance(route.metadata.distance)}</span>
               </div>
-              <div className="flex items-center gap-2">
+              {/* <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-primary" />
                 <span>{formatDuration(route.metadata.duration)}</span>
-              </div>
+              </div> */}
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-primary" />
                 <span>{route.waypoints.length} stops</span>
@@ -124,14 +126,14 @@ export function RouteCard({ route, index, distanceUnit, apiKey }: RouteCardProps
           <div className="flex gap-3 pt-2">
             <Button
               onClick={() => window.open(route.export.maps_url, '_blank')}
-              className="flex-2 gap-2 font-bold shadow-lg bg-zinc-950 text-white hover:bg-zinc-800 border-b-2 border-zinc-800 active:border-b-0 active:translate-y-0.5">
+              className="flex-2 gap-2 font-bold shadow-lg border-b-2 border-primary/80 active:border-b-0 active:translate-y-0.5">
               <ExternalLink className="w-4 h-4" />
               Start Navigation
             </Button>
             <Button
               variant="outline"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="flex-1 gap-2 font-bold border-2 border-zinc-200 shadow-sm bg-background hover:bg-zinc-50">
+              className="flex-1 gap-2 font-bold border-2 shadow-sm">
               Details
               <motion.div
                 animate={{

@@ -1,10 +1,8 @@
 /**
- * Route Evaluator Agent
- *
- * Evaluates all validated routes in a single LLM call: scenic score, safety score,
- * POI satisfaction, and narrative (summary, explanation, highlights) per route.
- * Falls back to template-based scoring if the LLM call fails.
+ * Route Evaluator - Scores validated routes (scenic, safety, POI satisfaction)
+ * using LLM with template-based fallback.
  */
+
 
 import type { LLMProvider } from '../providers/llm/interface';
 import type {
@@ -67,7 +65,7 @@ export class RouteEvaluator {
         const routeInput = routes.find(r => r.id === evaluation.routeId);
         if (!routeInput) continue;
 
-          // Calculate distance accuracy from route metadata
+        // Calculate distance accuracy from route metadata
         const distanceConstraint = preferences.constraints.hard.find(c => c.type === 'distance');
         const targetDistance = distanceConstraint && typeof distanceConstraint.value === 'number'
           ? (distanceConstraint.unit === 'km' ? distanceConstraint.value * 1000 : distanceConstraint.value * 1609.34)
@@ -190,21 +188,44 @@ Be honest and differentiated - don't give all routes the same scores.`;
       required: ['evaluations'],
     };
 
-    const result = await this.llm.generateJSON<{ evaluations: RouteEvaluation[] }>(prompt, schema, {
-      thinking: true,
+    console.log('[RouteEvaluator] Sending evaluation request to LLM...');
+    const result = await this.llm.generateJSON<any>(prompt, schema, {
+      temperature: 0.3,  // Lower temperature for consistent structured output
+      maxTokens: 4096,
     });
+    console.log('[RouteEvaluator] LLM response received:', JSON.stringify(result).slice(0, 200) + '...');
 
-    // Defensive check - LLM might return malformed response
-    if (!result || !Array.isArray(result.evaluations) || result.evaluations.length === 0) {
+    // Handle multiple response formats from LLM
+    let evaluationsArray: any[] = [];
+
+    if (Array.isArray(result?.evaluations)) {
+      evaluationsArray = result.evaluations;
+    } else if (Array.isArray(result?.routes)) {
+      evaluationsArray = result.routes;
+    } else if (result && typeof result === 'object') {
+      // Handle route1, route2, route3 format
+      const keys = Object.keys(result).filter(k => k.match(/^route\d+$/i));
+      if (keys.length > 0) {
+        evaluationsArray = keys.map((key, index) => ({
+          ...result[key],
+          routeId: routes[index]?.id || '',  // Map to actual route IDs
+        }));
+      }
+    }
+
+    if (evaluationsArray.length === 0) {
+      console.warn('[RouteEvaluator] Could not extract evaluations from LLM response:', result);
       throw new Error('LLM returned invalid or empty evaluations');
     }
 
-    // Validate and clamp all scores
-    return result.evaluations.map(evaluation => ({
-      ...evaluation,
+    // Normalize and validate all scores - handle both routeId and route_id
+    return evaluationsArray.map((evaluation: any, index: number) => ({
+      routeId: evaluation.routeId || evaluation.route_id || routes[index]?.id || '',
       scenicScore: this.clampScore(evaluation.scenicScore),
       safetyScore: this.clampScore(evaluation.safetyScore),
       poiSatisfaction: this.clampScore(evaluation.poiSatisfaction),
+      summary: evaluation.summary || '',
+      explanation: evaluation.explanation || '',
       highlights: Array.isArray(evaluation.highlights) ? evaluation.highlights.slice(0, 5) : [],
     }));
   }
@@ -217,7 +238,7 @@ Be honest and differentiated - don't give all routes the same scores.`;
     preferences: ParsedPreferences,
     allPOIs: RankedPOI[]
   ): EvaluationResult {
-    const { route, metadata, waypoints } = routeInput;
+    const { route, metadata, nearbyPOIs } = routeInput;
 
     // Simple heuristic scoring
     const scenicScore = this.templateScenicScore(metadata);
@@ -242,6 +263,16 @@ Be honest and differentiated - don't give all routes the same scores.`;
     );
 
     const distanceMiles = (route.distance / 1609.34).toFixed(1);
+    const distanceKm = (route.distance / 1000).toFixed(1);
+
+    // Generate intelligent narrative with POI names
+    const narrative = this.generateTemplateNarrative(
+      metadata,
+      distanceMiles,
+      distanceKm,
+      nearbyPOIs,
+      preferences
+    );
 
     return {
       scores: {
@@ -251,15 +282,88 @@ Be honest and differentiated - don't give all routes the same scores.`;
         distance_accuracy: distanceAccuracy,
         composite,
       },
-      narrative: {
-        summary: `${distanceMiles}-mile ${metadata.strategy} ${metadata.activity} route`,
-        explanation: `A ${metadata.strategy} route covering ${distanceMiles} miles with ${metadata.elevation_gain}m elevation gain.`,
-        highlights: [
-          `${distanceMiles} miles total`,
-          `${metadata.elevation_gain}m elevation`,
-          `${waypoints.length} waypoints`,
-        ],
-      },
+      narrative,
+    };
+  }
+
+  /**
+   * Generate intelligent template narrative with POI names and details.
+   */
+  private generateTemplateNarrative(
+    metadata: RouteMetadata,
+    distanceMiles: string,
+    distanceKm: string,
+    nearbyPOIs: RankedPOI[],
+    _preferences: ParsedPreferences
+  ): RouteNarrative {
+    // Get top POIs by score
+    const topPOIs = nearbyPOIs
+      .sort((a, b) => b.score.composite - a.score.composite)
+      .slice(0, 4);
+
+    // Extract POI types and names
+    const poiTypes = new Map<string, number>();
+    for (const poi of nearbyPOIs) {
+      poiTypes.set(poi.type, (poiTypes.get(poi.type) || 0) + 1);
+    }
+
+    // Build summary based on strategy
+    let summary = '';
+    const strategyDescriptors: Record<string, string> = {
+      [ROUTE_STRATEGIES.SCENIC]: 'picturesque',
+      [ROUTE_STRATEGIES.BALANCED]: 'well-rounded',
+      [ROUTE_STRATEGIES.ADVENTUROUS]: 'exploratory',
+      [ROUTE_STRATEGIES.SAFE]: 'comfortable',
+    };
+
+    const descriptor = strategyDescriptors[metadata.strategy] || 'enjoyable';
+
+    if (topPOIs.length >= 3) {
+      const poiNames = topPOIs.slice(0, 3).map(p => p.name).join(', ');
+      summary = `A ${descriptor} ${distanceMiles}-mile ${metadata.activity} route featuring ${poiNames}`;
+    } else if (topPOIs.length > 0) {
+      summary = `A ${descriptor} ${distanceMiles}-mile ${metadata.activity} route including ${topPOIs.map(p => p.name).join(' and ')}`;
+    } else {
+      summary = `A ${descriptor} ${distanceMiles}-mile ${metadata.strategy} ${metadata.activity} route`;
+    }
+
+    // Build explanation with POI type summary
+    const typeSummary = Array.from(poiTypes.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([type, count]) => `${count} ${type}${count > 1 ? 's' : ''}`)
+      .join(', ');
+
+    const explanation = topPOIs.length > 0
+      ? `This ${metadata.strategy} route covers ${distanceKm} km and passes ${typeSummary}. ${metadata.elevation_gain > 50 ? `Includes ${metadata.elevation_gain}m elevation gain for varied terrain.` : 'Mostly flat terrain for easy navigation.'}`
+      : `A ${metadata.strategy} route covering ${distanceKm} km with ${metadata.elevation_gain}m elevation gain.`;
+
+    // Build highlights
+    const highlights: string[] = [];
+
+    // Add distance and elevation
+    highlights.push(`${distanceMiles} miles (${distanceKm} km) total distance`);
+
+    if (metadata.elevation_gain > 50) {
+      highlights.push(`${metadata.elevation_gain}m elevation gain`);
+    } else {
+      highlights.push('Mostly flat, easy terrain');
+    }
+
+    // Add top POIs by name
+    for (const poi of topPOIs.slice(0, 3)) {
+      highlights.push(`Passes ${poi.name}`);
+    }
+
+    // Add POI type diversity
+    if (poiTypes.size >= 3) {
+      highlights.push(`Diverse mix of ${poiTypes.size} POI types`);
+    }
+
+    return {
+      summary,
+      explanation,
+      highlights,
     };
   }
 
@@ -316,17 +420,34 @@ Be honest and differentiated - don't give all routes the same scores.`;
     distanceAccuracy: number,
     preferences: ParsedPreferences
   ): number {
-    const scenicWeight = preferences.constraints.soft.find(c => c.type === 'scenic')?.weight || 0.3;
-    const safetyWeight = preferences.constraints.soft.find(c => c.type === 'safety')?.weight || 0.3;
-    const poiWeight = preferences.constraints.soft.find(c => c.type === 'poi')?.weight || 0.2;
-    const distanceWeight = 1 - scenicWeight - safetyWeight - poiWeight;
+    // Get importance weights (these are user preferences 0-1, NOT normalized)
+    const scenicImportance = preferences.constraints.soft.find(c => c.type === 'scenic')?.weight || 0.3;
+    const safetyImportance = preferences.constraints.soft.find(c => c.type === 'safety')?.weight || 0.3;
+    const poiImportance = preferences.constraints.soft.find(c => c.type === 'poi')?.weight || 0.2;
+    const distanceImportance = 0.2; // Fixed weight for distance accuracy
 
-    return (
-      scenic * scenicWeight +
-      safety * safetyWeight +
-      poiSatisfaction * poiWeight +
-      distanceAccuracy * 10 * Math.max(0.1, distanceWeight)
-    );
+    // Normalize weights so they sum to 1.0
+    const totalWeight = scenicImportance + safetyImportance + poiImportance + distanceImportance;
+    const scenicWeight = scenicImportance / totalWeight;
+    const safetyWeight = safetyImportance / totalWeight;
+    const poiWeight = poiImportance / totalWeight;
+    const distanceWeight = distanceImportance / totalWeight;
+
+    // All scores normalized to 0-1 for consistent weighting
+    const scenicNorm = scenic / 10;
+    const safetyNorm = safety / 10;
+    const poiNorm = poiSatisfaction / 10;
+    const distanceNorm = distanceAccuracy; // Already 0-1
+
+    // Weighted average (0-1), then scale back to 0-10
+    const composite = (
+      scenicNorm * scenicWeight +
+      safetyNorm * safetyWeight +
+      poiNorm * poiWeight +
+      distanceNorm * distanceWeight
+    ) * 10;
+
+    return Math.round(composite * 10) / 10;
   }
 
   private clampScore(value: number): number {
