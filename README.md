@@ -169,9 +169,3 @@ Both are used in accordance with their respective terms. Optional local mode use
 MIT License. See [LICENSE](./LICENSE) in the repository root.
 
 ---
-
-## Acknowledgments
-
-Built for the Google Gemini API Developer Competition.
-
-Gemini handles preference parsing, strategic planning, and route evaluation. Google Maps supplies routes, places, and geocoding.
