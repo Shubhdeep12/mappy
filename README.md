@@ -57,7 +57,7 @@ See [GEMINI_INTEGRATION.md](./docs/GEMINI_INTEGRATION.md) for Gemini usage detai
 ### Option A: One-command setup (recommended)
 
 ```bash
-git clone https://github.com/<your-username>/mappy.git
+git clone https://github.com/Shubhdeep12/mappy.git
 cd mappy
 pnpm setup
 pnpm dev
@@ -68,7 +68,7 @@ pnpm dev
 ### Option B: Manual setup
 
 ```bash
-git clone https://github.com/<your-username>/mappy.git
+git clone https://github.com/Shubhdeep12/mappy.git
 cd mappy
 pnpm install
 cp packages/backend/.env.example packages/backend/.env
