@@ -1,7 +1,7 @@
 {
   "buildCommand": "cd ../.. && pnpm install && pnpm run build:shared && pnpm run build:frontend",
-  "outputDirectory": "packages/frontend/dist",
-  "installCommand": "pnpm install",
+  "outputDirectory": "dist",
+  "installCommand": "cd ../.. && pnpm install",
   "framework": null,
   "rewrites": [
     {
