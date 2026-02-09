@@ -1,28 +1,7 @@
-/**
- * Request Logging Middleware
- * 
- * Structured logging for all incoming requests.
- * Generates correlation IDs and logs request/response lifecycle.
- * 
- * Logs:
- * - Request: method, path, query (body is never logged to protect API keys)
- * - Response: status, duration
- * - Errors: stack traces, context
- * 
- * Correlation ID:
- * - Generated per request (UUID)
- * - Included in response headers (X-Request-ID)
- * - Propagated to all downstream services
- * - Used for distributed tracing
- * 
- * Format: JSON structured logs for log aggregation
- * Tools: Compatible with Cloud Logging, Datadog, etc.
- */
+/** Logs each request with a correlation ID; never logs body (API keys). */
 
 import type { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
-
-// Extend Express Request to include correlation ID
 declare global {
   namespace Express {
     interface Request {

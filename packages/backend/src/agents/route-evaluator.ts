@@ -1,8 +1,4 @@
-/**
- * Route Evaluator - Scores validated routes (scenic, safety, POI satisfaction)
- * using LLM with template-based fallback.
- */
-
+/** Scores routes (scenic, safety, POIs) with LLM and template fallback. */
 
 import type { LLMProvider } from '../providers/llm/interface.js';
 import type {

@@ -1,27 +1,4 @@
-/**
- * API Routes
- * 
- * Express router configuration for all API endpoints.
- * 
- * Endpoints:
- * - POST /api/generate: Main route generation endpoint
- * - GET /api/health: Health check for all providers
- * - GET /api/status: System status and metrics
- * 
- * Request validation:
- * - Zod schema validation for RouteGenerationRequest
- * - Input sanitization
- * - Coordinate bounds checking
- * 
- * Provider injection:
- * - Accepts optional API keys in request body
- * - Creates providers via ProviderFactory
- * - Falls back to config-based providers
- * 
- * Response format:
- * - Success: GeneratedRoute JSON
- * - Error: ErrorResponse JSON with details
- */
+/** /api/generate, /health, /status. Keys come from the request body. */
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';

@@ -1,8 +1,3 @@
-/**
- * Express app — routes, middleware, and handler setup.
- * packages/backend/src/index.ts imports this and calls listen() to run the server.
- */
-
 import express, { type Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

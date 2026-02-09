@@ -1,7 +1,4 @@
-/**
- * Route Validator - Validates waypoint sequences using Google Directions API or OSRM.
- */
-
+/** Checks waypoint sequences are routable via Directions API. */
 
 import type { MapsProvider } from '../providers/maps/interface.js';
 import { calculateElevationGain } from '@mappy/shared';

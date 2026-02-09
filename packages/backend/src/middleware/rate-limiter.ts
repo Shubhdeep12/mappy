@@ -1,7 +1,3 @@
-/**
- * Rate Limiting Middleware - Token bucket algorithm (max 10 req/min).
- */
-
 import rateLimit from 'express-rate-limit';
 import { config } from '../config/index.js';
 

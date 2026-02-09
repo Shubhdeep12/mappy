@@ -1,11 +1,4 @@
-/**
- * Coordinate Validator
- * 
- * Validates that coordinates are reasonable for route generation:
- * - Within valid lat/lng ranges
- * - Not in the middle of ocean
- * - In inhabited/accessible areas
- */
+/** Check lat/lng are in range and not obviously invalid (e.g. ocean). */
 
 import type { LatLng } from '@mappy/shared';
 
@@ -15,10 +8,6 @@ export interface CoordinateValidationResult {
   suggestion?: string;
 }
 
-/**
- * Validate coordinates for route generation.
- * Uses simple heuristics to check if coordinates are reasonable.
- */
 export function validateCoordinates(location: LatLng): CoordinateValidationResult {
   const { lat, lng } = location;
 

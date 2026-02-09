@@ -1,15 +1,4 @@
-/**
- * Provider Factory
- * 
- * Creates provider instances based on user-provided API keys or free mode fallback.
- * Implements the factory pattern for provider abstraction.
- * 
- * Logic:
- * - If user provides API keys → use Gemini + Google Maps
- * - If no user keys → use Ollama + OSM (Free Mode)
- * 
- * No environment variable API keys - users manage their own keys via UI.
- */
+/** Picks LLM and Maps providers from request API keys or fallback. */
 
 import type { LLMProvider } from './llm/interface.js';
 import type { MapsProvider } from './maps/interface.js';
@@ -18,9 +7,6 @@ import { OSMProvider } from './maps/osm.js';
 import { config } from '../config/index.js';
 
 export class ProviderFactory {
-  /**
-   * Create LLM provider based on user-provided API key or free mode fallback
-   */
   static async createLLMProvider(apiKey?: string): Promise<LLMProvider> {
     if (apiKey) {
       const { GeminiProvider } = await import('./llm/gemini.js');
@@ -33,9 +19,6 @@ export class ProviderFactory {
     );
   }
 
-  /**
-   * Create Maps provider based on user-provided API key
-   */
   static async createMapsProvider(apiKey?: string): Promise<MapsProvider> {
     if (apiKey) {
       const { GoogleMapsProvider } = await import('./maps/google.js');

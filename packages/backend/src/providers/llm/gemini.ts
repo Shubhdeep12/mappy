@@ -1,9 +1,3 @@
-/**
- * Gemini LLM Provider - Uses Google Gemini API via @google/genai SDK.
- * Supports JSON mode, structured output, and native schema validation.
- */
-
-
 import { GoogleGenAI } from '@google/genai';
 import type { LLMProvider, GenerateOptions, JSONSchema } from './interface.js';
 

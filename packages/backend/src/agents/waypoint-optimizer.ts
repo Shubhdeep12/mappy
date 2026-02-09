@@ -1,8 +1,4 @@
-/**
- * Waypoint Optimizer - Generates optimal route candidates using algorithmic optimization
- * guided by AI strategic planning (the key innovation).
- */
-
+/** Builds route candidates from POIs and strategy (nearest-neighbor style). */
 
 import { haversineDistance, ROUTE_STRATEGIES } from '@mappy/shared';
 import {
@@ -26,29 +22,14 @@ import type {
 
 import type { OptimizationStrategy } from './strategic-planner.js';
 
-/**
- * Parameters for nearest-neighbor algorithm.
- */
 interface NearestNeighborWeights {
-  scoreWeight: number;      // POI composite score importance
-  distanceWeight: number;   // Distance from current point importance
-  typeWeight: number;       // POI type match importance
-  diversityBonus: number;   // Bonus for POI type diversity
+  scoreWeight: number;
+  distanceWeight: number;
+  typeWeight: number;
+  diversityBonus: number;
 }
 
 export class WaypointOptimizer {
-  /**
-   * Optimizes waypoints for a given route using AI-guided algorithm.
-   * 
-   * @param origin - The origin of the route.
-   * @param preferences - The preferences for the route.
-   * @param searchSpace - The search space from SpatialReasoner.
-   * @param pois - ALL discovered POIs (typically 50).
-   * @param strategy - Optimization strategy from AI StrategicPlanner.
-   * @param numFinalRoutes - The number of final routes to return.
-   * @param routeType - The type of route.
-   * @returns The optimized routes.
-   */
   async optimize(
     origin: LatLng,
     preferences: ParsedPreferences,

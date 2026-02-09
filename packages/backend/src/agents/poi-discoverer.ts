@@ -6,15 +6,6 @@ import type { BoundingBox, POI, POIType, RankedPOI, POIScore, ParsedPreferences 
 export class POIDiscoverer {
   constructor(private maps: MapsProvider) { }
 
-  /**
-   * Discovers POIs within a given bounding box.
-   * 
-   * @param bounds - The bounding box to discover POIs within.
-   * @param preferences - The preferences to use for discovering POIs.
-   * @param maxPOIs - The maximum number of POIs to discover.
-   * @param rawPreferenceTexts - Raw preference texts for fallback POI extraction.
-   * @returns The discovered POIs.
-   */
   async discoverPOIs(
     bounds: BoundingBox,
     preferences: ParsedPreferences,

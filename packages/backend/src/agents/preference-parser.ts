@@ -1,9 +1,4 @@
-/**
- * PreferenceParser - Converts natural language preferences into structured constraints
- * using LLM parsing with rule-based fallback for reliability.
- */
-
-
+/** Parses preference pills into structured constraints (LLM with rule-based fallback). */
 
 import type { LLMProvider } from '../providers/llm/interface.js';
 import type { PreferencePill, ParsedPreferences, HardConstraint, SoftConstraint, Objective, Ambiguity, ConfidenceScore, ContextMetadata } from '@mappy/shared';

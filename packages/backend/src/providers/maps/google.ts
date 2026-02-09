@@ -1,8 +1,4 @@
-/**
- * Google Maps Provider - Production implementation using Routes API (v2),
- * Places API (2023+), Geocoding, and Elevation APIs.
- */
-
+/** Google Maps: Routes, Places, Geocoding, Elevation. */
 
 import { createRequire } from 'node:module';
 import { Client, Status } from '@googlemaps/google-maps-services-js';
@@ -32,13 +28,6 @@ export class GoogleMapsProvider implements MapsProvider {
     this.placesClient = new PlacesClient({ apiKey });
   }
 
-  /**
-   * Generates a route using the modern Routes v2 API
-   * 
-   * @param waypoints - The waypoints to route between.
-   * @param mode - The travel mode.
-   * @returns The route.
-   */
   async route(waypoints: LatLng[], mode: TravelMode): Promise<Route> {
     if (waypoints.length < 2) {
       throw new Error('At least 2 waypoints required for routing');

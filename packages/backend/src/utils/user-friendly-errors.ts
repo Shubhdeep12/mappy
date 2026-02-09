@@ -1,8 +1,4 @@
-/**
- * User-Friendly Error Messages
- * 
- * Maps technical errors to messages users can understand and act on.
- */
+/** Map backend errors to messages and suggestions for the UI. */
 
 export interface UserFriendlyError {
   message: string;
@@ -111,9 +107,6 @@ export function getUserFriendlyError(error: unknown): UserFriendlyError {
   };
 }
 
-/**
- * Format error for API response
- */
 export function formatErrorResponse(error: unknown): {
   error: string;
   suggestion?: string;

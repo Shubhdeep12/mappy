@@ -1,6 +1,4 @@
-/**
- * Route Orchestrator - Coordinates all 7 agents in the route generation pipeline.
- */
+/** Runs the full route pipeline: parse prefs → spatial/POI → plan → optimize → validate → pick best. */
 
 import type { LLMProvider } from '../providers/llm/interface.js';
 import type { MapsProvider } from '../providers/maps/interface.js';

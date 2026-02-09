@@ -14,14 +14,6 @@ import type {
 } from "@mappy/shared";
 
 export class SpatialReasoner {
-  /**
-   * Compute search space from origin and optional distance constraint.
-   *
-   * @param origin - The starting location.
-   * @param distanceConstraint - The distance constraint.
-   * @param routeType - The route type.
-   * @returns The search space.
-   */
   computeSearchSpace(
     origin: LatLng,
     distanceConstraint: HardConstraint | null,

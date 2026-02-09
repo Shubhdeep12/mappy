@@ -1,26 +1,4 @@
-/**
- * Error Handling Middleware
- * 
- * Centralized error handling for Express routes.
- * Transforms errors into standardized ErrorResponse format.
- * 
- * Error classification:
- * - RECOVERABLE: Can retry or fallback
- * - DEGRADED: Partial functionality available
- * - FATAL: Cannot proceed
- * 
- * Error response format:
- * - code: Machine-readable error code
- * - message: Human-readable message
- * - retry_after: Optional retry delay (seconds)
- * - fallback_available: Whether fallback exists
- * - request_id: Correlation ID for debugging
- * 
- * Logging:
- * - Structured logging with error context
- * - Request correlation ID tracking
- * - Error metrics collection
- */
+/** Turns thrown errors into a consistent JSON response and logs them. */
 
 import type { Request, Response, NextFunction } from 'express';
 import { sanitizeForLog } from '../utils/sanitize.js';

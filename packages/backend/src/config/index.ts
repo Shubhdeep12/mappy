@@ -1,8 +1,4 @@
-/**
- * App Configuration - Loads environment variables for server, LLM, maps, rate limiting, and cache.
- * API keys (Gemini/Google Maps) are provided via UI, not env vars.
- */
-
+/** Server config from env. API keys come from the request, not env. */
 
 export interface AppConfig {
   env: 'development' | 'production';
@@ -30,9 +26,6 @@ export interface AppConfig {
   };
 }
 
-/**
- * Load and validate configuration from environment variables
- */
 export function loadConfig(): AppConfig {
   const env = (process.env.NODE_ENV as 'development' | 'production') || 'development';
 
