@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MapPin,
-  Clock,
   Navigation,
   ChevronDown,
   ExternalLink,
@@ -29,15 +28,15 @@ export function RouteCard({ route, index, distanceUnit, apiKey }: RouteCardProps
     return `${(meters / 1609.34).toFixed(1)} mi`;
   };
 
-  const formatDuration = (seconds: number) => {
-    const minutes = Math.round(seconds / 60);
-    if (minutes < 60) {
-      return `${minutes} min`;
-    }
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
-  };
+  // const formatDuration = (seconds: number) => {
+  //   const minutes = Math.round(seconds / 60);
+  //   if (minutes < 60) {
+  //     return `${minutes} min`;
+  //   }
+  //   const hours = Math.floor(minutes / 60);
+  //   const remainingMinutes = minutes % 60;
+  //   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+  // };
 
   // Convert waypoints to display format (use coordinates or POI names if available)
   const waypointNames = route.waypoints.map((wp, i) => {
