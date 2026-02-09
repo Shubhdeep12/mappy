@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: mappy-backend
+    runtime: node
+    plan: free
+    region: oregon  # Change to your preferred region
+    buildCommand: >
+      corepack enable &&
+      corepack prepare pnpm@9.15.7 --activate &&
+      pnpm install &&
+      pnpm run build:shared &&
+      pnpm run build:backend
+    startCommand: cd packages/backend && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: CORS_ORIGIN
+        sync: false  # Set to your frontend URL, e.g., https://mappy.netlify.app
+    healthCheckPath: /health

@@ -74,6 +74,31 @@ export function RouteGenerator() {
   const apiRef = useRef(new RouteAPI());
   const progressStepsRef = useRef<HTMLDivElement>(null);
 
+  // Server warmup: Fire health check on mount to wake up cold-started servers
+  useEffect(() => {
+    const warmupServer = async () => {
+      try {
+        await apiRef.current.healthCheck();
+        console.log('✅ Server warmed up and ready');
+      } catch (error) {
+        // Silently ignore warmup errors - server might still wake up
+        console.log('⏳ Server warming up...');
+      }
+    };
+
+    // Initial warmup
+    warmupServer();
+
+    // Keep-alive: Ping every 5 minutes to prevent cold starts during active sessions
+    const keepAliveInterval = setInterval(() => {
+      apiRef.current.healthCheck().catch(() => {
+        // Ignore errors - this is just a keep-alive
+      });
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(keepAliveInterval);
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
