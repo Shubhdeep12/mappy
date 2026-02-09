@@ -619,7 +619,7 @@ export function RouteGenerator() {
                   <div className="flex items-center gap-2">
                     <Key className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm font-semibold text-foreground">
-                      {apiKeys.gemini || apiKeys.googleMaps ? 'API keys set' : 'API Keys (Optional)'}
+                      {apiKeys.gemini?.trim() && apiKeys.googleMaps?.trim() ? 'API keys set' : 'API Keys (Required)'}
                     </span>
                   </div>
                   <motion.div
@@ -691,12 +691,15 @@ export function RouteGenerator() {
               </div>
             </div>
 
-            {/* Generate Button */}
-            <div className={`generate-button-wrapper shadow-xl ${!(isGenerating || !location || preferences.length === 0) ? 'active' : ''}`}>
+            {/* Generate Button - requires both API keys, location, and at least one preference */}
+            {!(apiKeys.gemini?.trim() && apiKeys.googleMaps?.trim()) && (
+              <p className="text-sm text-muted-foreground mb-2">Add your Gemini and Google Maps API keys in Settings above to generate routes.</p>
+            )}
+            <div className={`generate-button-wrapper shadow-xl ${!(isGenerating || !location || preferences.length === 0 || !apiKeys.gemini?.trim() || !apiKeys.googleMaps?.trim()) ? 'active' : ''}`}>
               <button
                 className="generate-button-shimmer w-full h-full flex items-center justify-center text-lg font-bold transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={generateRoutes}
-                disabled={isGenerating || !location || preferences.length === 0}>
+                disabled={isGenerating || !location || preferences.length === 0 || !apiKeys.gemini?.trim() || !apiKeys.googleMaps?.trim()}>
                 {isGenerating ?
                   <>
                     <Loader2 className="w-5 h-5 animate-spin mr-2" />

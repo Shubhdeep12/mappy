@@ -46,7 +46,7 @@ See [GEMINI_INTEGRATION.md](./docs/GEMINI_INTEGRATION.md) for Gemini usage detai
 - **AI-guided optimization** — Gemini for strategy, algorithms for route construction
 - **Three route variants** — Scenic, Balanced, Adventurous
 - **Export** — open routes in Google Maps or Apple Maps
-- **Dual mode** — Gemini + Google Maps, or local (Ollama + OpenStreetMap)
+- **Gemini + Google Maps** — API keys in Settings (required)
 
 ---
 
@@ -79,7 +79,7 @@ pnpm dev
 ### Run the app
 
 - **Backend** runs on `http://localhost:8080`, **frontend** on `http://localhost:3000` (or the port Vite prints).
-- Open the frontend URL in the browser. In the app, add **Gemini** and **Google Maps** API keys in Settings to use full features, or use **free mode** (Ollama + OpenStreetMap) with no keys.
+- Open the frontend URL in the browser and add your **Gemini** and **Google Maps** API keys in Settings (required to generate routes).
 
 ### API keys
 
@@ -130,8 +130,7 @@ mappy/
 **Frontend:** React 19, TypeScript, Vite, Tailwind CSS  
 **Backend:** Node.js, Express, TypeScript  
 **AI:** Gemini 3 (structured JSON output)  
-**Maps:** Google Maps (Routes, Places, Geocoding APIs)  
-**Dev Mode:** Ollama (gemma3:1b) + OpenStreetMap
+**Maps:** Google Maps (Routes, Places, Geocoding APIs)
 
 ---
 
@@ -159,7 +158,7 @@ This project uses:
 - **Google Gemini API** — LLM for preference parsing, strategic planning, and route evaluation ([terms](https://ai.google.dev/terms)).
 - **Google Maps APIs** — Routes, Places, and Geocoding ([terms](https://cloud.google.com/maps-platform/terms)).
 
-Both are used in accordance with their respective terms. Optional local mode uses Ollama and OpenStreetMap.
+Both are used in accordance with their respective terms.
 
 ---
 

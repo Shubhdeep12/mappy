@@ -235,7 +235,7 @@ When the Maps provider is **Google** (user supplies a Google Maps API key), thes
 - **User provides address:** 1 (health) + 1 (geocode) + (4–6) Places + (1–3) Routes = **7–11** Google API calls.
 - **User provides coordinates:** 1 (health) + (4–6) Places + (1–3) Routes = **6–10** Google API calls.
 
-*(OSM/Nominatim is used only for reverse geocoding city name in metadata, not for routing or POIs when Google is the Maps provider.)*
+*(City name in route metadata is inferred from coordinates when available.)*
 
 ---
 
