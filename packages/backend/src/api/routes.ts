@@ -45,8 +45,9 @@ router.get('/health', async (_req: Request, res: Response, next: NextFunction) =
     ]);
 
     const healthy = llmHealthy && mapsHealthy;
-
-    res.status(healthy ? 200 : 503).json({
+    // Always return 200 so load balancers (e.g. Render) consider the server up.
+    // Providers are fallback (Ollama/OSM) when no keys; they often fail in production.
+    res.status(200).json({
       status: healthy ? 'healthy' : 'degraded',
       providers: {
         llm: llmHealthy ? 'healthy' : 'unhealthy',
@@ -129,28 +130,6 @@ router.post('/generate', async (req, res, next) => {
       );
     }
 
-    sendProgress('health_check', 'Checking provider connectivity...', 10);
-
-    // Health check providers
-    const [llmHealthy, mapsHealthy] = await Promise.all([
-      llm.healthCheck(),
-      maps.healthCheck(),
-    ]);
-
-    if (!llmHealthy || !mapsHealthy) {
-      const issues = [];
-      if (!llmHealthy) issues.push('LLM provider');
-      if (!mapsHealthy) issues.push('Maps provider');
-
-      throw createError(
-        `Provider(s) unavailable: ${issues.join(', ')}. Please check your configuration and network connectivity.`,
-        503,
-        {
-          code: 'PROVIDER_UNAVAILABLE',
-          fallbackAvailable: false,
-        }
-      );
-    }
 
     const isAdvancedModel = !!apiKeys?.gemini;
     const orchestrator = new RouteOrchestrator(llm, maps, isAdvancedModel);
