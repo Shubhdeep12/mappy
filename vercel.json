@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm run build:frontend && pnpm run build:shared",
+  "buildCommand": "pnpm run build:shared && pnpm run build:frontend",
   "outputDirectory": "packages/frontend/dist",
   "installCommand": "corepack enable && pnpm install --frozen-lockfile",
   "framework": null,
