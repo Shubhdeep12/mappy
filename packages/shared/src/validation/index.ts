@@ -4,4 +4,4 @@
  * Provides RouteGenerationRequestSchema for API request validation.
  */
 
-export * from './schemas';
+export * from './schemas.js';

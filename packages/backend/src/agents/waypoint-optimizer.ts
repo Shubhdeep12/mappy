@@ -9,7 +9,7 @@ import {
   ROUTE_CONSTANTS,
   DISTANCE_CONSTANTS,
   ROUTE_MODE,
-} from '../config/constants';
+} from '../config/constants.js';
 
 import type {
   LatLng,
@@ -24,7 +24,7 @@ import type {
   POIType,
 } from '@mappy/shared';
 
-import type { OptimizationStrategy } from './strategic-planner';
+import type { OptimizationStrategy } from './strategic-planner.js';
 
 /**
  * Parameters for nearest-neighbor algorithm.

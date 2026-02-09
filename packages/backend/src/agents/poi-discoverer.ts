@@ -1,6 +1,6 @@
-import type { MapsProvider } from '../providers/maps/interface';
+import type { MapsProvider } from '../providers/maps/interface.js';
 import { haversineDistance } from '@mappy/shared';
-import { DISTANCE_CONSTANTS } from '../config/constants';
+import { DISTANCE_CONSTANTS } from '../config/constants.js';
 import type { BoundingBox, POI, POIType, RankedPOI, POIScore, ParsedPreferences } from '@mappy/shared';
 
 export class POIDiscoverer {

@@ -4,7 +4,7 @@
  */
 
 
-import type { LLMProvider, GenerateOptions, JSONSchema } from './interface';
+import type { LLMProvider, GenerateOptions, JSONSchema } from './interface.js';
 
 export class OllamaProvider implements LLMProvider {
   private endpoint: string;

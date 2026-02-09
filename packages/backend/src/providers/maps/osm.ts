@@ -4,7 +4,7 @@
  */
 
 
-import type { MapsProvider } from './interface';
+import type { MapsProvider } from './interface.js';
 import type { LatLng, BoundingBox, TravelMode, POIType, Route, POI } from '@mappy/shared';
 
 export class OSMProvider implements MapsProvider {

@@ -5,7 +5,7 @@
  * used across backend services and agents.
  */
 
-import type { LatLng } from '../types';
+import type { LatLng } from '../types/index.js';
 
 /**
  * Earth's radius in meters

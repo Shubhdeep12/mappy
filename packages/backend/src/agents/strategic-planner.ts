@@ -4,7 +4,7 @@
  */
 
 
-import type { LLMProvider } from '../providers/llm/interface';
+import type { LLMProvider } from '../providers/llm/interface.js';
 import type {
   ParsedPreferences,
   RankedPOI,

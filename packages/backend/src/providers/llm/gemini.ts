@@ -5,7 +5,7 @@
 
 
 import { GoogleGenAI } from '@google/genai';
-import type { LLMProvider, GenerateOptions, JSONSchema } from './interface';
+import type { LLMProvider, GenerateOptions, JSONSchema } from './interface.js';
 
 export class GeminiProvider implements LLMProvider {
   private readonly client: GoogleGenAI;

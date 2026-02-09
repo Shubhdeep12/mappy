@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import app from './app';
-import { config } from './config';
+import app from './app.js';
+import { config } from './config/index.js';
 
 const server = app.listen(config.server.port, config.server.host, () => {
   console.log(JSON.stringify({

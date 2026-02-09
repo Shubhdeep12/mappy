@@ -26,10 +26,10 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
 import { RouteGenerationRequestSchema } from '@mappy/shared';
-import { ProviderFactory } from '../providers/factory';
-import { createError } from '../middleware/error-handler';
-import { RouteOrchestrator } from '../services/orchestrator';
-import { formatErrorResponse } from '../utils/user-friendly-errors';
+import { ProviderFactory } from '../providers/factory.js';
+import { createError } from '../middleware/error-handler.js';
+import { RouteOrchestrator } from '../services/orchestrator.js';
+import { formatErrorResponse } from '../utils/user-friendly-errors.js';
 
 const router: Router = Router();
 

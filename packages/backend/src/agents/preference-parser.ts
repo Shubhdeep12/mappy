@@ -5,7 +5,7 @@
 
 
 
-import type { LLMProvider } from '../providers/llm/interface';
+import type { LLMProvider } from '../providers/llm/interface.js';
 import type { PreferencePill, ParsedPreferences, HardConstraint, SoftConstraint, Objective, Ambiguity, ConfidenceScore, ContextMetadata } from '@mappy/shared';
 
 export class PreferenceParser {

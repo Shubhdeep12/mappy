@@ -8,8 +8,8 @@
  * - Utility functions used across backend and frontend
  */
 
-export * from './types';
-export * from './providers';
-export * from './validation';
-export * from './utils/geometry';
-export * from './constants';
+export * from './types/index.js';
+export * from './providers/index.js';
+export * from './validation/index.js';
+export * from './utils/geometry.js';
+export * from './constants/index.js';

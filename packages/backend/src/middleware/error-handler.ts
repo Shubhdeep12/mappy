@@ -23,7 +23,7 @@
  */
 
 import type { Request, Response, NextFunction } from 'express';
-import { sanitizeForLog } from '../utils/sanitize';
+import { sanitizeForLog } from '../utils/sanitize.js';
 
 export interface AppError extends Error {
   statusCode?: number;

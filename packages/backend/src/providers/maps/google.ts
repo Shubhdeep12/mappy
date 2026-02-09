@@ -12,7 +12,7 @@ import { getDistance } from 'geolib';
 
 const require = createRequire(import.meta.url);
 const { decode } = require('@googlemaps/polyline-codec') as { decode: (encoded: string, precision?: number) => [number, number][] };
-import type { MapsProvider } from './interface';
+import type { MapsProvider } from './interface.js';
 import type { LatLng, BoundingBox, TravelMode, POIType, Route, POI } from '@mappy/shared';
 
 export class GoogleMapsProvider implements MapsProvider {

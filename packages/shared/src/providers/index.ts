@@ -9,5 +9,5 @@
  * Application code uses these interfaces, never concrete implementations
  */
 
-export * from './llm';
-export * from './maps';
+export * from './llm.js';
+export * from './maps.js';

@@ -2,16 +2,16 @@
  * Route Orchestrator - Coordinates all 7 agents in the route generation pipeline.
  */
 
-import type { LLMProvider } from '../providers/llm/interface';
-import type { MapsProvider } from '../providers/maps/interface';
-import { PreferenceParser } from '../agents/preference-parser';
-import { SpatialReasoner } from '../agents/spatial-reasoner';
-import { POIDiscoverer } from '../agents/poi-discoverer';
-import { StrategicPlanner } from '../agents/strategic-planner';
-import { WaypointOptimizer } from '../agents/waypoint-optimizer';
-import { RouteValidator } from '../agents/route-validator';
-import { RouteEvaluator } from '../agents/route-evaluator';
-import { MapsExporter } from './maps-exporter';
+import type { LLMProvider } from '../providers/llm/interface.js';
+import type { MapsProvider } from '../providers/maps/interface.js';
+import { PreferenceParser } from '../agents/preference-parser.js';
+import { SpatialReasoner } from '../agents/spatial-reasoner.js';
+import { POIDiscoverer } from '../agents/poi-discoverer.js';
+import { StrategicPlanner } from '../agents/strategic-planner.js';
+import { WaypointOptimizer } from '../agents/waypoint-optimizer.js';
+import { RouteValidator } from '../agents/route-validator.js';
+import { RouteEvaluator } from '../agents/route-evaluator.js';
+import { MapsExporter } from './maps-exporter.js';
 import {
   haversineDistance,
   calculateElevationGain,
@@ -22,8 +22,8 @@ import {
   QUALITY_CONSTANTS,
   ACTIVITY_TYPE,
   ROUTE_MODE,
-} from '../config/constants';
-import { validateCoordinates, getLocationDescription } from '../utils/coordinate-validator';
+} from '../config/constants.js';
+import { validateCoordinates, getLocationDescription } from '../utils/coordinate-validator.js';
 import {
   PreferencePill,
   LocationInput,

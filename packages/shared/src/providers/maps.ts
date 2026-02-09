@@ -12,7 +12,7 @@
  * - healthCheck(): Provider availability check
  */
 
-import type { LatLng, BoundingBox, TravelMode, POIType, Route, POI } from '../types';
+import type { LatLng, BoundingBox, TravelMode, POIType, Route, POI } from '../types/index.js';
 
 export interface MapsProvider {
   /**

@@ -6,10 +6,10 @@
 import express, { type Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { requestLogger } from './middleware/request-logger';
-import { rateLimiter } from './middleware/rate-limiter';
-import { errorHandler } from './middleware/error-handler';
-import apiRoutes from './api/routes';
+import { requestLogger } from './middleware/request-logger.js';
+import { rateLimiter } from './middleware/rate-limiter.js';
+import { errorHandler } from './middleware/error-handler.js';
+import apiRoutes from './api/routes.js';
 
 const app: Express = express();
 

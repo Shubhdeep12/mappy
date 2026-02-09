@@ -20,7 +20,7 @@ export interface GeoFence {
   coordinates: LatLng[] | { center: LatLng; radius: number };
 }
 
-import { ROUTE_MODE, ACTIVITY_TYPE } from '../constants';
+import { ROUTE_MODE, ACTIVITY_TYPE } from '../constants/index.js';
 
 export const ROUTE_STRATEGIES = {
   SCENIC: 'scenic' as const,

@@ -4,7 +4,7 @@ import {
   DISTANCE_CONSTANTS,
   SPATIAL_CONSTANTS,
   ROUTE_MODE,
-} from "../config/constants";
+} from "../config/constants.js";
 import type {
   LatLng,
   HardConstraint,

@@ -3,9 +3,9 @@
  */
 
 
-import type { MapsProvider } from '../providers/maps/interface';
+import type { MapsProvider } from '../providers/maps/interface.js';
 import { calculateElevationGain } from '@mappy/shared';
-import { VALIDATION_CONSTANTS, DISTANCE_CONSTANTS } from '../config/constants';
+import { VALIDATION_CONSTANTS, DISTANCE_CONSTANTS } from '../config/constants.js';
 import type { LatLng, ParsedPreferences, ValidationResult, ActivityType } from '@mappy/shared';
 import { ValidationError } from '@mappy/shared';
 

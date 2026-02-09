@@ -4,7 +4,7 @@
  */
 
 
-import type { LLMProvider } from '../providers/llm/interface';
+import type { LLMProvider } from '../providers/llm/interface.js';
 import type {
   Route,
   RouteMetadata,
@@ -15,7 +15,7 @@ import type {
   LatLng,
 } from '@mappy/shared';
 import { haversineDistance, ROUTE_STRATEGIES } from '@mappy/shared';
-import { DISTANCE_CONSTANTS, SCORING_CONSTANTS } from '../config/constants';
+import { DISTANCE_CONSTANTS, SCORING_CONSTANTS } from '../config/constants.js';
 
 interface RouteInput {
   id: string;
